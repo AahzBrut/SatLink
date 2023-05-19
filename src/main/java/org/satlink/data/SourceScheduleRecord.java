@@ -1,4 +1,4 @@
-package org.example.data;
+package org.satlink.data;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

@@ -3,7 +3,7 @@ plugins {
     id("io.freefair.lombok") version "8.0.1"
 }
 
-group = "org.example"
+group = "org.satlink"
 version = "1.0-SNAPSHOT"
 
 repositories {

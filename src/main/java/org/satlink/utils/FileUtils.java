@@ -1,11 +1,13 @@
-package org.example.utils;
+package org.satlink.utils;
 
 import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -13,6 +15,7 @@ import java.util.stream.Stream;
 @Slf4j
 @UtilityClass
 public class FileUtils {
+    public static final DateTimeFormatter US_DATETIME_FORMATTER = DateTimeFormatter.ofPattern("d MMM uuuu HH:mm:ss.SSS", Locale.US);
 
     public static List<File> getFilteredFilesFromDirectory(Path directoryPath, Predicate<File> filter) {
         return Stream

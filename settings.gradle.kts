@@ -1,2 +1,2 @@
-rootProject.name = "StarLink"
+rootProject.name = "SatLink"
 

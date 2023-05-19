@@ -1,9 +1,9 @@
-package org.example.loaders;
+package org.satlink.loaders;
 
 import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
-import org.example.data.Config;
-import org.example.exceptions.ConfigLoadException;
+import org.satlink.data.Config;
+import org.satlink.exceptions.ConfigLoadException;
 
 import java.util.Properties;
 

@@ -1,4 +1,4 @@
-package org.example.exceptions;
+package org.satlink.exceptions;
 
 public class ConfigLoadException extends RuntimeException{
     public ConfigLoadException(String message) {

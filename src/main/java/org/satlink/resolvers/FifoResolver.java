@@ -6,6 +6,7 @@ import org.satlink.data.Schedule;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 
 @Slf4j
@@ -14,13 +15,15 @@ public class FifoResolver {
     private final Schedule connectionSchedule;
     private final Schedule flybySchedule;
 
-    @SuppressWarnings("java:S135")
+    @SuppressWarnings({"java:S135" ,"java:S3518"})
     public Schedule calculate() {
         sortConnectionSchedule();
         sortFlybySchedule();
+
         final var connections = connectionSchedule.getRecords();
         final var satelliteTransactions = initSatelliteTransactions();
         final var stationTransactions = initStationTransactions();
+
         for (int[] connection : connections) {
             final var currentTimeForStation = calcCurrentTimeForStation(stationTransactions[connection[0]], connection[2]);
             final var currentTimeForSatellite = calcCurrentTimeForSatellite(satelliteTransactions[connection[1]], connection[2]);
@@ -29,13 +32,43 @@ public class FifoResolver {
             final var usedMemory = calcMemoryUsage(satelliteTransactions[connection[1]], currentTime);
             var maxUploadMemory = (connection[3] - currentTime) >> 2;
             if (maxUploadMemory > usedMemory) maxUploadMemory = usedMemory << 2;
-            if (maxUploadMemory == 0) continue;
+            if (maxUploadMemory <= 0  || usedMemory <= 0) continue;
             maxUploadMemory += currentTime;
             addStationTransaction(stationTransactions[connection[0]], connection[1], currentTime, maxUploadMemory);
             addSatelliteTransaction(satelliteTransactions[connection[1]], connection[0], currentTime, maxUploadMemory);
         }
 
+        var counter = 0;
+        var avgMemUsage = 0.0;
+        var totalSent = 0.0;
+        for (final var schedule : satelliteTransactions) {
+            final var memUsage = calcMemoryUsage(schedule, Integer.MAX_VALUE) / 25000.0;
+            final var dataSent = calcSentVolume(schedule, Integer.MAX_VALUE);
+            avgMemUsage += memUsage;
+            totalSent += dataSent;
+            log.info("Memory usage for sat" + (counter++) + ": " + memUsage + ", sent: " + dataSent);
+        }
+        log.info("Average mem usage: " + avgMemUsage /counter);
+        log.info("Total sent: " + totalSent);
+
         return null;
+    }
+
+    private int calcSentVolume(List<int[]> satelliteTransactions, int currentTime) {
+        var result = 0;
+        for (int[] transaction : satelliteTransactions) {
+            if (transaction[1] >= currentTime) break;
+            if (transaction[2] < currentTime) {
+                if (transaction[0] >= 0) {
+                    result += (transaction[2] - transaction[1]) >> 2;
+                }
+            } else {
+                if (transaction[0] >= 0) {
+                    result += currentTime - transaction[1] >> 2;
+                }
+            }
+        }
+        return result;
     }
 
     private void addSatelliteTransaction(List<int[]> satelliteTransactions, int stationId, int currentTime, int stopTime) {
@@ -103,18 +136,20 @@ public class FifoResolver {
             if (transaction[2] < currentTime) {
                 if (transaction[0] < 0) {
                     result += transaction[2] - transaction[1];
+                    result = Math.min(result, 2500000);
                 } else {
                     result -= (transaction[2] - transaction[1]) >> 2;
                 }
             } else {
                 if (transaction[0] < 0) {
                     result += currentTime - transaction[1];
+                    result = Math.min(result, 2500000);
                 } else {
                     result -= currentTime - transaction[1] >> 2;
                 }
             }
         }
-        return Math.min(result, 2500000);
+        return result;
     }
 
     @SuppressWarnings("All")
@@ -139,10 +174,7 @@ public class FifoResolver {
     }
 
     private void sortConnectionSchedule() {
-        Arrays.sort(connectionSchedule.getRecords(), (row1, row2) -> {
-            if (row1[2] == row2[2]) return Integer.compare(row2[3], row1[3]);
-            return Integer.compare(row1[2], row2[2]);
-        });
+        Arrays.sort(connectionSchedule.getRecords(), Comparator.comparingInt(row -> row[2]));
     }
 
     private void sortFlybySchedule() {

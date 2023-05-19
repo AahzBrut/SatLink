@@ -30,9 +30,9 @@ public class FifoResolver {
             final var currentTime = Math.max(currentTimeForSatellite, currentTimeForStation);
             if (connection[3] < currentTime) continue;
             final var usedMemory = calcMemoryUsage(satelliteTransactions[connection[1]], currentTime);
-            var maxUploadMemory = (connection[3] - currentTime) >> 2;
-            if (maxUploadMemory > usedMemory) maxUploadMemory = usedMemory << 2;
-            if (maxUploadMemory <= 0  || usedMemory <= 0) continue;
+            var maxUploadMemory = connection[3] - currentTime;
+            if (maxUploadMemory > usedMemory) maxUploadMemory = usedMemory;
+            if (maxUploadMemory <= 0) continue;
             maxUploadMemory += currentTime;
             addStationTransaction(stationTransactions[connection[0]], connection[1], currentTime, maxUploadMemory);
             addSatelliteTransaction(satelliteTransactions[connection[1]], connection[0], currentTime, maxUploadMemory);

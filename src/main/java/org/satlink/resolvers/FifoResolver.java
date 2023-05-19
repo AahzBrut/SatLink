@@ -25,17 +25,24 @@ public class FifoResolver {
         final var stationTransactions = initStationTransactions();
 
         for (int[] connection : connections) {
-            final var currentTimeForStation = calcCurrentTimeForStation(stationTransactions[connection[0]], connection[2]);
-            final var currentTimeForSatellite = calcCurrentTimeForSatellite(satelliteTransactions[connection[1]], connection[2]);
-            final var currentTime = Math.max(currentTimeForSatellite, currentTimeForStation);
-            if (connection[3] < currentTime) continue;
-            final var usedMemory = calcMemoryUsage(satelliteTransactions[connection[1]], currentTime);
-            var maxUploadMemory = connection[3] - currentTime;
+            final var stationId = connection[0];
+            final var satelliteId = connection[1];
+            final var startTime = connection[2];
+            final var endTime = connection[3];
+
+            final var currentTimeForStation = calcCurrentTimeForStation(stationTransactions[stationId], startTime);
+            final var currentTimeForSatellite = calcCurrentTimeForSatellite(satelliteTransactions[satelliteId], startTime);
+            final var currentTime = Math.max(Math.max(currentTimeForSatellite, currentTimeForStation), startTime);
+            if (endTime < currentTime) continue;
+
+            final var usedMemory = calcMemoryUsage(satelliteTransactions[satelliteId], currentTime);
+            var maxUploadMemory = endTime - currentTime;
             if (maxUploadMemory > usedMemory) maxUploadMemory = usedMemory;
             if (maxUploadMemory <= 0) continue;
             maxUploadMemory += currentTime;
-            addStationTransaction(stationTransactions[connection[0]], connection[1], currentTime, maxUploadMemory);
-            addSatelliteTransaction(satelliteTransactions[connection[1]], connection[0], currentTime, maxUploadMemory);
+
+            addStationTransaction(stationTransactions[stationId], satelliteId, currentTime, maxUploadMemory);
+            addSatelliteTransaction(satelliteTransactions[satelliteId], stationId, currentTime, maxUploadMemory);
         }
 
         var counter = 0;
@@ -54,6 +61,7 @@ public class FifoResolver {
         return null;
     }
 
+    @SuppressWarnings("SameParameterValue")
     private int calcSentVolume(List<int[]> satelliteTransactions, int currentTime) {
         var result = 0;
         for (int[] transaction : satelliteTransactions) {
@@ -71,6 +79,7 @@ public class FifoResolver {
         return result;
     }
 
+    @SuppressWarnings({"java:S3776", "java:S135"})
     private void addSatelliteTransaction(List<int[]> satelliteTransactions, int stationId, int currentTime, int stopTime) {
         satelliteTransactions.removeIf(e -> e[1] >= currentTime && e[2] <= stopTime);
         var insertIndex = -1;

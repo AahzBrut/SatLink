@@ -264,7 +264,7 @@ public class FifoResolver {
                     result += currentTime - transaction[1];
                     result = Math.min(result, 2500000);
                 } else {
-                    result -= currentTime - transaction[1] >> 2;
+                    result -= (currentTime - transaction[1]) >> 2;
                 }
             }
         }

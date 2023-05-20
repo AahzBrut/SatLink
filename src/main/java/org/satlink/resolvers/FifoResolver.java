@@ -7,7 +7,6 @@ import org.satlink.exceptions.ResultIntegrityException;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
 
 @Slf4j
@@ -16,7 +15,7 @@ public class FifoResolver {
     private final Schedule connectionSchedule;
     private final Schedule flybySchedule;
 
-    @SuppressWarnings({"java:S135", "java:S3518"})
+    @SuppressWarnings({"java:S135", "java:S3518", "java:S125"})
     public Schedule calculate() {
         sortConnectionSchedule();
         sortFlybySchedule();
@@ -24,6 +23,7 @@ public class FifoResolver {
         final var connections = connectionSchedule.getRecords();
         final var satelliteTransactions = initSatelliteTransactions();
         final var stationTransactions = initStationTransactions();
+        //final var stationsSniffSchedules = initStationsSchedules();
 
         for (int[] connection : connections) {
             final var stationId = connection[0];
@@ -40,15 +40,17 @@ public class FifoResolver {
             var maxUploadMemory = endTime - currentTime;
             if (maxUploadMemory > usedMemory) maxUploadMemory = usedMemory;
             if (maxUploadMemory <= 0) continue;
+
             maxUploadMemory += currentTime;
+            //final var others = calculateOtherVariants(stationsSniffSchedules[stationId], satelliteId, Math.max(startTime, currentTimeForStation), maxUploadMemory);
 
             addStationTransaction(stationTransactions[stationId], satelliteId, currentTime, maxUploadMemory);
             addSatelliteTransaction(satelliteTransactions[satelliteId], stationId, currentTime, maxUploadMemory);
         }
 
-        final var stationsSchedules = initStationSchedules();
+        final var stationsSatellitesSchedules = initStationSatelliteSchedules();
         final var satelliteShootingPeriods = initSatelliteTransactions();
-        checkStationsTransactions(stationTransactions, stationsSchedules);
+        checkStationsTransactions(stationTransactions, stationsSatellitesSchedules);
         checkStationsTransactionsContinuity(stationTransactions);
         checkStationsTransactionsContinuity(satelliteTransactions);
         checkSatelliteShootingTransactions(satelliteTransactions, satelliteShootingPeriods);
@@ -67,6 +69,35 @@ public class FifoResolver {
         log.info("Total sent: " + totalSent);
 
         return null;
+    }
+
+    @SuppressWarnings({"java:S135", "unused"})
+    private List<int[]> calculateOtherVariants(List<int[]> stationsSniffSchedule, int satelliteId, int startTime, int stopTime) {
+        final var result = new ArrayList<int[]>();
+        for(final var entry: stationsSniffSchedule){
+            final var entrySatelliteId = entry[0];
+            final var entryStartTime = entry[1];
+            if (entrySatelliteId == satelliteId) continue;
+            if (entryStartTime >= startTime && entryStartTime < stopTime) {
+                result.add(entry);
+            }
+            if (entryStartTime >= stopTime) break;
+        }
+
+        return result;
+    }
+
+    @SuppressWarnings("All")
+    private List<int[]>[] initStationsSchedules() {
+        final var result = new ArrayList[connectionSchedule.getStationNames().length];
+        final var allSchedules = connectionSchedule.getRecords();
+        for (var i = 0; i < result.length; i++) {
+            result[i] = new ArrayList<int[]>();
+        }
+        for (final var schedule : allSchedules){
+            result[schedule[0]].add(new int[]{ schedule[1], schedule[2], schedule[3]});
+        }
+        return result;
     }
 
     @SuppressWarnings("java:S3776")
@@ -262,7 +293,7 @@ public class FifoResolver {
     }
 
     @SuppressWarnings("All")
-    private List<int[]>[][] initStationSchedules() {
+    private List<int[]>[][] initStationSatelliteSchedules() {
         final var result = new ArrayList[connectionSchedule.getStationNames().length][connectionSchedule.getSatelliteNames().length];
         final var schedules = connectionSchedule.getRecords();
 
@@ -280,7 +311,10 @@ public class FifoResolver {
     }
 
     private void sortConnectionSchedule() {
-        Arrays.sort(connectionSchedule.getRecords(), Comparator.comparingInt(row -> row[2]));
+        Arrays.sort(connectionSchedule.getRecords(),  (row1, row2) -> {
+            if (row1[2] == row2[2]) return Integer.compare(row1[3], row2[3]);
+            return Integer.compare(row1[2], row2[2]);
+        });
     }
 
     private void sortFlybySchedule() {

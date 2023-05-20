@@ -3,6 +3,7 @@ package org.satlink.resolvers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.satlink.data.Schedule;
+import org.satlink.exceptions.ResultIntegrityException;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -15,7 +16,7 @@ public class FifoResolver {
     private final Schedule connectionSchedule;
     private final Schedule flybySchedule;
 
-    @SuppressWarnings({"java:S135" ,"java:S3518"})
+    @SuppressWarnings({"java:S135", "java:S3518"})
     public Schedule calculate() {
         sortConnectionSchedule();
         sortFlybySchedule();
@@ -30,10 +31,10 @@ public class FifoResolver {
             final var startTime = connection[2];
             final var endTime = connection[3];
 
-            final var currentTimeForStation = calcCurrentTimeForStation(stationTransactions[stationId], startTime);
-            final var currentTimeForSatellite = calcCurrentTimeForSatellite(satelliteTransactions[satelliteId], startTime);
+            final var currentTimeForStation = getCurrentTimeForStation(stationTransactions[stationId], startTime);
+            final var currentTimeForSatellite = getCurrentTimeForSatellite(satelliteTransactions[satelliteId], startTime);
             final var currentTime = Math.max(Math.max(currentTimeForSatellite, currentTimeForStation), startTime);
-            if (endTime < currentTime) continue;
+            if (endTime <= currentTime) continue;
 
             final var usedMemory = calcMemoryUsage(satelliteTransactions[satelliteId], currentTime);
             var maxUploadMemory = endTime - currentTime;
@@ -45,6 +46,13 @@ public class FifoResolver {
             addSatelliteTransaction(satelliteTransactions[satelliteId], stationId, currentTime, maxUploadMemory);
         }
 
+        final var stationsSchedules = initStationSchedules();
+        final var satelliteShootingPeriods = initSatelliteTransactions();
+        checkStationsTransactions(stationTransactions, stationsSchedules);
+        checkStationsTransactionsContinuity(stationTransactions);
+        checkStationsTransactionsContinuity(satelliteTransactions);
+        checkSatelliteShootingTransactions(satelliteTransactions, satelliteShootingPeriods);
+
         var counter = 0;
         var avgMemUsage = 0.0;
         var totalSent = 0.0;
@@ -55,10 +63,81 @@ public class FifoResolver {
             totalSent += dataSent;
             log.info("Memory usage for sat" + (counter++) + ": " + memUsage + ", sent: " + dataSent);
         }
-        log.info("Average mem usage: " + avgMemUsage /counter);
+        log.info("Average mem usage: " + avgMemUsage / counter);
         log.info("Total sent: " + totalSent);
 
         return null;
+    }
+
+    @SuppressWarnings("java:S3776")
+    private void checkSatelliteShootingTransactions(List<int[]>[] satellitesTransactions, List<int[]>[] satellitesShootingPeriods) {
+        final var satellitesCount = satellitesTransactions.length;
+        for (var satelliteId = 0; satelliteId < satellitesCount; satelliteId++) {
+            var satelliteTransactions = satellitesTransactions[satelliteId];
+            for (final var transaction : satelliteTransactions) {
+                final var stationId = transaction[0];
+                if (stationId >= 0) continue;
+                final var startTime = transaction[1];
+                final var stopTime = transaction[2];
+
+                var scheduleFound = false;
+                for (var schedule : satellitesShootingPeriods[satelliteId]) {
+                    if (schedule[1] <= startTime && schedule[2] >= stopTime) {
+                        scheduleFound = true;
+                        break;
+                    }
+                }
+
+                if (!scheduleFound) {
+                    final var message = "Shooting mismatched schedule!\nSatellite: " + satelliteId;
+                    log.error(message);
+                    throw new ResultIntegrityException(message);
+                }
+            }
+        }
+    }
+
+    private void checkStationsTransactionsContinuity(List<int[]>[] stationsTransactions) {
+        for (final var stationTransactions : stationsTransactions) {
+            var lastStopTime = 0;
+            for (final var transaction : stationTransactions) {
+                final var startTime = transaction[1];
+                final var stopTime = transaction[2];
+                if (stopTime < startTime || lastStopTime >= startTime) {
+                    final var message = "Continuity check failed.";
+                    log.error(message);
+                    throw new ResultIntegrityException(message);
+                }
+                lastStopTime = stopTime;
+            }
+        }
+    }
+
+    private void checkStationsTransactions(List<int[]>[] stationsTransactions, List<int[]>[][] stationsSchedules) {
+        var stationCounter = 0;
+
+        for (final var stationTransactions : stationsTransactions) {
+            for (final var transaction : stationTransactions) {
+                final var satelliteId = transaction[0];
+                final var startTime = transaction[1];
+                final var stopTime = transaction[2];
+
+                var scheduleFound = false;
+
+                for (final var schedule : stationsSchedules[stationCounter][satelliteId]) {
+                    if (schedule[0] <= startTime && schedule[1] >= stopTime) {
+                        scheduleFound = true;
+                        break;
+                    }
+                }
+                if (!scheduleFound) {
+                    final var message = "Transaction mismatched schedule!\nStation: " + stationCounter + ", Satellite: " + satelliteId;
+                    log.error(message);
+                    throw new ResultIntegrityException(message);
+                }
+            }
+            stationCounter++;
+        }
     }
 
     @SuppressWarnings("SameParameterValue")
@@ -97,12 +176,12 @@ public class FifoResolver {
                 transaction[1] = stopTime + 1;
             }
             if (transaction[1] < currentTime && transaction[2] > stopTime) {
+                splitEnd = transaction[2];
                 transaction[2] = currentTime - 1;
                 insertIndex = i + 1;
                 splitIndex = i + 2;
                 splitStation = transaction[0];
                 splitStart = stopTime + 1;
-                splitEnd = transaction[2];
             }
             if (insertIndex == -1 && transaction[1] > stopTime) {
                 insertIndex = i;
@@ -124,7 +203,7 @@ public class FifoResolver {
         stationTransactions.add(new int[]{stationId, currentTime, stopTime});
     }
 
-    private int calcCurrentTimeForSatellite(List<int[]> stationTransactions, int minTime) {
+    private int getCurrentTimeForSatellite(List<int[]> stationTransactions, int minTime) {
         for (var i = stationTransactions.size() - 1; i >= 0; i--) {
             final var currentTransaction = stationTransactions.get(i);
             if (currentTransaction[0] > 0) return currentTransaction[2] + 1;
@@ -132,7 +211,7 @@ public class FifoResolver {
         return minTime;
     }
 
-    private int calcCurrentTimeForStation(List<int[]> stationTransactions, int minTime) {
+    private int getCurrentTimeForStation(List<int[]> stationTransactions, int minTime) {
         if (stationTransactions.isEmpty()) return minTime;
         final var lastTransaction = stationTransactions.get(stationTransactions.size() - 1);
         return lastTransaction[2] + 1;
@@ -178,6 +257,24 @@ public class FifoResolver {
         for (int[] shooting : shootings) {
             if (result[shooting[0]] == null) result[shooting[0]] = new ArrayList<int[]>();
             result[shooting[0]].add(new int[]{-1, shooting[1], shooting[2]});
+        }
+        return result;
+    }
+
+    @SuppressWarnings("All")
+    private List<int[]>[][] initStationSchedules() {
+        final var result = new ArrayList[connectionSchedule.getStationNames().length][connectionSchedule.getSatelliteNames().length];
+        final var schedules = connectionSchedule.getRecords();
+
+        for (int[] schedule : schedules) {
+            final var stationId = schedule[0];
+            final var satelliteId = schedule[1];
+            final var startTime = schedule[2];
+            final var stopTime = schedule[3];
+
+            if (result[stationId][satelliteId] == null) result[stationId][satelliteId] = new ArrayList<int[]>();
+
+            result[stationId][satelliteId].add(new int[]{startTime, stopTime});
         }
         return result;
     }

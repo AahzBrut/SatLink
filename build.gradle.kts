@@ -27,3 +27,20 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
 }
+
+val fatJar = task("fatJar", type = Jar::class) {
+    manifest {
+        attributes["Implementation-Title"] = "SatLink"
+        attributes["Implementation-Version"] = version
+        attributes["Main-Class"] = "org.satlink.Main"
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
+    with(tasks.jar.get() as CopySpec)
+}
+
+tasks {
+    "build" {
+        dependsOn(fatJar)
+    }
+}

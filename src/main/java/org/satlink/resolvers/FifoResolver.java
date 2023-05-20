@@ -5,9 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.satlink.data.Schedule;
 import org.satlink.exceptions.ResultIntegrityException;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -36,7 +34,7 @@ public class FifoResolver {
             final var currentTime = Math.max(Math.max(currentTimeForSatellite, currentTimeForStation), startTime);
             if (endTime <= currentTime) continue;
 
-            final var usedMemory = calcMemoryUsage(satelliteTransactions[satelliteId], currentTime);
+            final var usedMemory = calcMemoryUsage(satelliteTransactions[satelliteId], currentTime) << 2;
             var maxUploadMemory = endTime - currentTime;
             if (maxUploadMemory > usedMemory) maxUploadMemory = usedMemory;
             if (maxUploadMemory <= 0) continue;
@@ -68,13 +66,54 @@ public class FifoResolver {
         log.info("Average mem usage: " + avgMemUsage / counter);
         log.info("Total sent: " + totalSent);
 
+        printStationStats(stationTransactions);
+
         return null;
+    }
+
+    private void printStationStats(List<int[]>[] stationTransactions) {
+        final var rxLimits = getStationsRxLimit();
+        final var stationCount = stationTransactions.length;
+        for (var i = 0; i < stationCount; i++) {
+            final var satelliteCount = new HashSet<Integer>();
+            var sumTransactionTime = 0L;
+            for (final var transaction: stationTransactions[i]){
+                satelliteCount.add(transaction[0]);
+                sumTransactionTime += transaction[2] - transaction[1];
+            }
+            log.info(String.format(Locale.UK,"Station %d; receive time: %,d; time limit: %,d; number of satellites: %d", i, sumTransactionTime, rxLimits[i], satelliteCount.size()));
+            satelliteCount.clear();
+        }
+    }
+
+    private long[] getStationsRxLimit() {
+        final var result = new long[connectionSchedule.getStationNames().length];
+        final var stationsSchedules = initStationsSchedules();
+        int stationCount = stationsSchedules.length;
+        for (int i = 0; i < stationCount; i++) {
+            final var stationTransactions = stationsSchedules[i];
+            var lastStart = 0;
+            var lastStop = 0;
+            for (final var transaction : stationTransactions) {
+                final var startTime = transaction[1];
+                final var stopTime = transaction[2];
+                if (lastStart == 0) lastStart = startTime;
+                if (lastStop == 0) lastStop = stopTime;
+                if (startTime > lastStop) {
+                    result[i] += lastStop - lastStart;
+                    lastStart = startTime;
+                }
+                lastStop = Math.max(stopTime, lastStop);
+            }
+            if (result[i] == 0) result[i] += lastStop - lastStart;
+        }
+        return result;
     }
 
     @SuppressWarnings({"java:S135", "unused"})
     private List<int[]> calculateOtherVariants(List<int[]> stationsSniffSchedule, int satelliteId, int startTime, int stopTime) {
         final var result = new ArrayList<int[]>();
-        for(final var entry: stationsSniffSchedule){
+        for (final var entry : stationsSniffSchedule) {
             final var entrySatelliteId = entry[0];
             final var entryStartTime = entry[1];
             if (entrySatelliteId == satelliteId) continue;
@@ -94,8 +133,8 @@ public class FifoResolver {
         for (var i = 0; i < result.length; i++) {
             result[i] = new ArrayList<int[]>();
         }
-        for (final var schedule : allSchedules){
-            result[schedule[0]].add(new int[]{ schedule[1], schedule[2], schedule[3]});
+        for (final var schedule : allSchedules) {
+            result[schedule[0]].add(new int[]{schedule[1], schedule[2], schedule[3]});
         }
         return result;
     }
@@ -311,7 +350,7 @@ public class FifoResolver {
     }
 
     private void sortConnectionSchedule() {
-        Arrays.sort(connectionSchedule.getRecords(),  (row1, row2) -> {
+        Arrays.sort(connectionSchedule.getRecords(), (row1, row2) -> {
             if (row1[2] == row2[2]) return Integer.compare(row1[3], row2[3]);
             return Integer.compare(row1[2], row2[2]);
         });

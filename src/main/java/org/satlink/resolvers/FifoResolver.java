@@ -182,7 +182,7 @@ public class FifoResolver {
                 }
             } else {
                 if (transaction[0] >= 0) {
-                    result += currentTime - transaction[1] >> 2;
+                    result += (currentTime - transaction[1]) >> 2;
                 }
             }
         }

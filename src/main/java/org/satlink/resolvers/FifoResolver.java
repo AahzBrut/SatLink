@@ -356,7 +356,7 @@ public class FifoResolver {
     private int getCurrentTimeForSatellite(List<int[]> stationTransactions, int minTime) {
         for (var i = stationTransactions.size() - 1; i >= 0; i--) {
             final var currentTransaction = stationTransactions.get(i);
-            if (currentTransaction[0] > 0) return currentTransaction[2] + 1;
+            if (currentTransaction[0] >= 0) return currentTransaction[2] + 1;
         }
         return minTime;
     }

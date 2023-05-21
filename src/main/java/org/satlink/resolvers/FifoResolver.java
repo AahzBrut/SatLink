@@ -234,10 +234,8 @@ public class FifoResolver {
     private List<int[]>[] initStationsSchedules() {
         final var result = new ArrayList[connectionSchedule.getStationNames().length];
         final var allSchedules = connectionSchedule.getRecords();
-        for (var i = 0; i < result.length; i++) {
-            result[i] = new ArrayList<int[]>();
-        }
         for (final var schedule : allSchedules) {
+            if (result[schedule[0]] == null) result[schedule[0]] = new ArrayList<int[]>();
             result[schedule[0]].add(new int[]{schedule[1], schedule[2], schedule[3]});
         }
         return result;

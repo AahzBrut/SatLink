@@ -209,7 +209,7 @@ public class FifoResolver {
                 }
                 lastStop = Math.max(stopTime, lastStop);
             }
-            if (result[i] == 0) result[i] += lastStop - lastStart;
+            result[i] += lastStop - lastStart;
         }
         return result;
     }

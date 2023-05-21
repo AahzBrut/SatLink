@@ -64,6 +64,12 @@ public class FifoResolver {
             addSatelliteTransaction(satelliteTransactions[satelliteId], stationId, currentTime, maxUploadMemory);
         }
 
+        saveResultsAndStats(skipReasons, satelliteTransactions, stationTransactions);
+
+        return null;
+    }
+
+    private void saveResultsAndStats(long[][] skipReasons, List<int[]>[] satelliteTransactions, List<int[]>[] stationTransactions) {
         final var stationsSatellitesSchedules = initStationSatelliteSchedules();
         final var satelliteShootingPeriods = initSatelliteTransactions();
         checkStationsTransactions(stationTransactions, stationsSatellitesSchedules);
@@ -91,13 +97,23 @@ public class FifoResolver {
         saveShootingSchedules();
         saveStationsTransactions(stationTransactions);
         saveSatelliteTransactions(satelliteTransactions);
+        checkInputDoubles();
 
         for (int i = 0; i < skipReasons.length; i++) {
             var entry = skipReasons[i];
             log.info(String.format(Locale.UK, "Skip reasons for station %d: Station busy: %d, Satellite busy: %d, No data: %d, Time skipped station: %,d, Time skipped satellite: %,d, Time skipped no data: %,d", i, entry[0], entry[1], entry[2], entry[3], entry[4], entry[5]));
         }
+    }
 
-        return null;
+    private void checkInputDoubles() {
+        var lastEntry = new int[]{0,0,0,0};
+        Arrays.sort(connectionSchedule.getRecords(), Arrays::compare);
+        for (final var entry : connectionSchedule.getRecords()){
+            if (Arrays.compare(lastEntry, entry) == 0) {
+                throw new ResultIntegrityException("Found doubles in input schedule.");
+            }
+            lastEntry = entry;
+        }
     }
 
     @SuppressWarnings({"Duplicates", "java:S1192"})

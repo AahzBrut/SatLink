@@ -20,7 +20,7 @@ public class FifoResolver {
         sortConnectionSchedule();
         sortFlybySchedule();
 
-        final var skipReasons = new int[]{0, 0, 0};
+        final var skipReasons = new long[connectionSchedule.getStationNames().length][6];
 
         final var connections = connectionSchedule.getRecords();
         final var satelliteTransactions = initSatelliteTransactions();
@@ -37,8 +37,14 @@ public class FifoResolver {
             final var currentTimeForSatellite = getCurrentTimeForSatellite(satelliteTransactions[satelliteId], startTime);
             final var currentTime = Math.max(Math.max(currentTimeForSatellite, currentTimeForStation), startTime);
             if (endTime <= currentTime) {
-                if (endTime <= currentTimeForStation) skipReasons[0]++;
-                if (endTime <= currentTimeForSatellite) skipReasons[1]++;
+                if (endTime <= currentTimeForStation) {
+                    skipReasons[stationId][0]++;
+                    skipReasons[stationId][3] += endTime-startTime;
+                }
+                if (endTime <= currentTimeForSatellite) {
+                    skipReasons[stationId][1]++;
+                    skipReasons[stationId][4] += endTime-startTime;
+                }
                 continue;
             }
 
@@ -46,7 +52,8 @@ public class FifoResolver {
             var maxUploadMemory = endTime - currentTime;
             if (maxUploadMemory > usedMemory) maxUploadMemory = usedMemory;
             if (maxUploadMemory <= 0) {
-                skipReasons[2]++;
+                skipReasons[stationId][2]++;
+                skipReasons[stationId][5] += endTime-startTime;
                 continue;
             }
 
@@ -63,6 +70,7 @@ public class FifoResolver {
         checkStationsTransactionsContinuity(stationTransactions);
         checkStationsTransactionsContinuity(satelliteTransactions);
         checkSatelliteShootingTransactions(satelliteTransactions, satelliteShootingPeriods);
+        checkSatelliteTransactions(satelliteTransactions, stationTransactions);
 
         var counter = 0;
         var avgMemUsage = 0.0;
@@ -84,9 +92,10 @@ public class FifoResolver {
         saveStationsTransactions(stationTransactions);
         saveSatelliteTransactions(satelliteTransactions);
 
-        log.info("Window skipped due to station was busy: " + skipReasons[0]);
-        log.info("Window skipped due to satellite was busy: " + skipReasons[1]);
-        log.info("Window skipped due to lack of data: " + skipReasons[2]);
+        for (int i = 0; i < skipReasons.length; i++) {
+            var entry = skipReasons[i];
+            log.info(String.format(Locale.UK, "Skip reasons for station %d: Station busy: %d, Satellite busy: %d, No data: %d, Time skipped station: %,d, Time skipped satellite: %,d, Time skipped no data: %,d", i, entry[0], entry[1], entry[2], entry[3], entry[4], entry[5]));
+        }
 
         return null;
     }
@@ -162,7 +171,6 @@ public class FifoResolver {
                 sumTransactionTime += transaction[2] - transaction[1];
             }
             log.info(String.format(Locale.UK, "Station %d; receive time: %,d; time limit: %,d; number of satellites: %d", i, sumTransactionTime, rxLimits[i], satelliteCount.size()));
-            satelliteCount.clear();
         }
     }
 
@@ -287,6 +295,27 @@ public class FifoResolver {
                 }
             }
             stationCounter++;
+        }
+    }
+
+    @SuppressWarnings("java:S3776")
+    private void checkSatelliteTransactions(List<int[]>[] satelliteTransactions, List<int[]>[] stationTransactions) {
+        final var satelliteCount = satelliteTransactions.length;
+        for (var i = 0; i < satelliteCount; i++) {
+            final var transactions = satelliteTransactions[i];
+            for (final var transaction : transactions) {
+                if (transaction[0] < 0) continue;
+                final var stationTransactionList = stationTransactions[transaction[0]];
+                var matched = false;
+                for (final var stationTransaction : stationTransactionList) {
+                    if (i == stationTransaction[0] && transaction[1] == stationTransaction[1] && transaction[2] == stationTransaction[2]) {
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched)
+                    throw new ResultIntegrityException(String.format("StationId: %d, SatelliteId: %d, StartTime: %d, StopTime: %d", transaction[0], i, transaction[1], transaction[2]));
+            }
         }
     }
 

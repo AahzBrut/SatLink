@@ -20,6 +20,8 @@ public class FifoResolver {
         sortConnectionSchedule();
         sortFlybySchedule();
 
+        final var skipReasons = new int[]{0, 0, 0};
+
         final var connections = connectionSchedule.getRecords();
         final var satelliteTransactions = initSatelliteTransactions();
         final var stationTransactions = initStationTransactions();
@@ -34,12 +36,19 @@ public class FifoResolver {
             final var currentTimeForStation = getCurrentTimeForStation(stationTransactions[stationId], startTime);
             final var currentTimeForSatellite = getCurrentTimeForSatellite(satelliteTransactions[satelliteId], startTime);
             final var currentTime = Math.max(Math.max(currentTimeForSatellite, currentTimeForStation), startTime);
-            if (endTime <= currentTime) continue;
+            if (endTime <= currentTime) {
+                if (endTime <= currentTimeForStation) skipReasons[0]++;
+                if (endTime <= currentTimeForSatellite) skipReasons[1]++;
+                continue;
+            }
 
             final var usedMemory = calcMemoryUsage(satelliteTransactions[satelliteId], currentTime) << 2;
             var maxUploadMemory = endTime - currentTime;
             if (maxUploadMemory > usedMemory) maxUploadMemory = usedMemory;
-            if (maxUploadMemory <= 0) continue;
+            if (maxUploadMemory <= 0) {
+                skipReasons[2]++;
+                continue;
+            }
 
             maxUploadMemory += currentTime;
             //final var others = calculateOtherVariants(stationsSniffSchedules[stationId], satelliteId, Math.max(startTime, currentTimeForStation), maxUploadMemory);
@@ -74,6 +83,10 @@ public class FifoResolver {
         saveShootingSchedules();
         saveStationsTransactions(stationTransactions);
         saveSatelliteTransactions(satelliteTransactions);
+
+        log.info("Window skipped due to station was busy: " + skipReasons[0]);
+        log.info("Window skipped due to satellite was busy: " + skipReasons[1]);
+        log.info("Window skipped due to lack of data: " + skipReasons[2]);
 
         return null;
     }

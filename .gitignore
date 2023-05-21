@@ -38,3 +38,5 @@ bin/
 .DS_Store
 /DATA_Files/
 /.idea/
+
+*.csv

@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.satlink.data.Schedule;
 import org.satlink.exceptions.ResultIntegrityException;
 
+import java.io.FileWriter;
+import java.io.PrintWriter;
 import java.util.*;
 
 @Slf4j
@@ -68,7 +70,72 @@ public class FifoResolver {
 
         printStationStats(stationTransactions);
 
+        saveStationsSchedules();
+        saveShootingSchedules();
+        saveStationsTransactions(stationTransactions);
+        saveSatelliteTransactions(satelliteTransactions);
+
         return null;
+    }
+
+    @SuppressWarnings({"Duplicates", "java:S1192"})
+    private void saveSatelliteTransactions(List<int[]>[] satelliteTransactions) {
+        try (final var fileWriter = new FileWriter("SatelliteTransactions.csv");
+             final var printWriter = new PrintWriter(fileWriter)
+        ) {
+            printWriter.println("StationId, SatelliteId, StartTime, StopTime, Duration");
+            for (int i = 0; i < satelliteTransactions.length; i++) {
+                final var entries = satelliteTransactions[i];
+                for (final var entry : entries) {
+                    printWriter.println(String.format("%d, %d, %d, %d, %d", entry[0], i, entry[1], entry[2], entry[2] - entry[1]));
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to save satellite transactions.");
+        }
+    }
+
+    @SuppressWarnings({"Duplicates", "java:S1192"})
+    private void saveStationsTransactions(List<int[]>[] stationTransactions) {
+        try (final var fileWriter = new FileWriter("StationTransactions.csv");
+             final var printWriter = new PrintWriter(fileWriter)
+        ) {
+            printWriter.println("StationId, SatelliteId, StartTime, StopTime, Duration");
+            for (int i = 0; i < stationTransactions.length; i++) {
+                final var entries = stationTransactions[i];
+                for (final var entry : entries) {
+                    printWriter.println(String.format("%d, %d, %d, %d, %d", i, entry[0], entry[1], entry[2], entry[2] - entry[1]));
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to save shooting schedules.");
+        }
+    }
+
+    private void saveShootingSchedules() {
+        try (final var fileWriter = new FileWriter("ShootingSchedules.csv");
+             final var printWriter = new PrintWriter(fileWriter)
+        ) {
+            printWriter.println("SatelliteId, StartTime, StopTime, Duration");
+            for (final var entry : flybySchedule.getRecords()) {
+                printWriter.println(String.format("%d, %d, %d, %d", entry[0], entry[1], entry[2], entry[2] - entry[1]));
+            }
+        } catch (Exception e) {
+            log.error("Failed to save shooting schedules.");
+        }
+    }
+
+    private void saveStationsSchedules() {
+        try (final var fileWriter = new FileWriter("StationsSchedules.csv");
+             final var printWriter = new PrintWriter(fileWriter)
+        ) {
+            printWriter.println("StationId, SatelliteId, StartTime, StopTime, Duration");
+            for (final var entry : connectionSchedule.getRecords()) {
+                printWriter.println(String.format("%d, %d, %d, %d, %d", entry[0], entry[1], entry[2], entry[3], entry[3] - entry[2]));
+            }
+        } catch (Exception e) {
+            log.error("Failed to save stations schedules.");
+        }
     }
 
     private void printStationStats(List<int[]>[] stationTransactions) {
@@ -77,11 +144,11 @@ public class FifoResolver {
         for (var i = 0; i < stationCount; i++) {
             final var satelliteCount = new HashSet<Integer>();
             var sumTransactionTime = 0L;
-            for (final var transaction: stationTransactions[i]){
+            for (final var transaction : stationTransactions[i]) {
                 satelliteCount.add(transaction[0]);
                 sumTransactionTime += transaction[2] - transaction[1];
             }
-            log.info(String.format(Locale.UK,"Station %d; receive time: %,d; time limit: %,d; number of satellites: %d", i, sumTransactionTime, rxLimits[i], satelliteCount.size()));
+            log.info(String.format(Locale.UK, "Station %d; receive time: %,d; time limit: %,d; number of satellites: %d", i, sumTransactionTime, rxLimits[i], satelliteCount.size()));
             satelliteCount.clear();
         }
     }

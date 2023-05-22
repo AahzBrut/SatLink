@@ -3,6 +3,7 @@ package org.satlink.resolvers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.satlink.data.Schedule;
+import org.satlink.data.SkipTypes;
 import org.satlink.exceptions.ResultIntegrityException;
 
 import java.io.FileWriter;
@@ -20,12 +21,10 @@ public class FifoResolver {
         sortConnectionSchedule();
         sortFlybySchedule();
 
-        final var skipReasons = new long[connectionSchedule.getStationNames().length][6];
-
         final var connections = connectionSchedule.getRecords();
         final var satelliteTransactions = initSatelliteTransactions();
         final var stationTransactions = initStationTransactions();
-        //final var stationsSniffSchedules = initStationsSchedules();
+        final var skipStats = new ArrayList<int[]>();
 
         for (int[] connection : connections) {
             final var stationId = connection[0];
@@ -38,12 +37,10 @@ public class FifoResolver {
             final var currentTime = Math.max(Math.max(currentTimeForSatellite, currentTimeForStation), startTime);
             if (endTime <= currentTime) {
                 if (endTime <= currentTimeForStation) {
-                    skipReasons[stationId][0]++;
-                    skipReasons[stationId][3] += endTime-startTime;
+                    skipStats.add(new int[]{SkipTypes.STATION_BUSY.ordinal(), stationId, satelliteId, startTime, endTime});
                 }
                 if (endTime <= currentTimeForSatellite) {
-                    skipReasons[stationId][1]++;
-                    skipReasons[stationId][4] += endTime-startTime;
+                    skipStats.add(new int[]{SkipTypes.SATELLITE_BUSY.ordinal(), stationId, satelliteId, startTime, endTime});
                 }
                 continue;
             }
@@ -52,26 +49,25 @@ public class FifoResolver {
             var maxUploadMemory = endTime - currentTime;
             if (maxUploadMemory > usedMemory) maxUploadMemory = usedMemory;
             if (maxUploadMemory <= 0) {
-                skipReasons[stationId][2]++;
-                skipReasons[stationId][5] += endTime-startTime;
+                skipStats.add(new int[]{SkipTypes.SATELLITE_MEMORY_EMPTY.ordinal(), stationId, satelliteId, startTime, endTime});
                 continue;
             }
 
             maxUploadMemory += currentTime;
-            //final var others = calculateOtherVariants(stationsSniffSchedules[stationId], satelliteId, Math.max(startTime, currentTimeForStation), maxUploadMemory);
 
             addStationTransaction(stationTransactions[stationId], satelliteId, currentTime, maxUploadMemory);
             addSatelliteTransaction(satelliteTransactions[satelliteId], stationId, currentTime, maxUploadMemory);
         }
 
-        saveResultsAndStats(skipReasons, satelliteTransactions, stationTransactions);
+        saveResultsAndStats(skipStats, satelliteTransactions, stationTransactions);
 
         return null;
     }
 
-    private void saveResultsAndStats(long[][] skipReasons, List<int[]>[] satelliteTransactions, List<int[]>[] stationTransactions) {
+    private void saveResultsAndStats(ArrayList<int[]> skipStats, List<int[]>[] satelliteTransactions, List<int[]>[] stationTransactions) {
         final var stationsSatellitesSchedules = initStationSatelliteSchedules();
         final var satelliteShootingPeriods = initSatelliteTransactions();
+        checkInputDoubles();
         checkStationsTransactions(stationTransactions, stationsSatellitesSchedules);
         checkStationsTransactionsContinuity(stationTransactions);
         checkStationsTransactionsContinuity(satelliteTransactions);
@@ -88,7 +84,7 @@ public class FifoResolver {
             totalSent += dataSent;
             log.info("Memory usage for sat" + (counter++) + ": " + memUsage + ", sent: " + dataSent);
         }
-        log.info("Average mem usage: " + avgMemUsage / counter);
+        log.info("Average mem usage: " + avgMemUsage / (counter == 0 ? 1 : counter));
         log.info("Total sent: " + totalSent);
 
         printStationStats(stationTransactions);
@@ -97,18 +93,27 @@ public class FifoResolver {
         saveShootingSchedules();
         saveStationsTransactions(stationTransactions);
         saveSatelliteTransactions(satelliteTransactions);
-        checkInputDoubles();
+        saveSkipWindowStats(skipStats);
+    }
 
-        for (int i = 0; i < skipReasons.length; i++) {
-            var entry = skipReasons[i];
-            log.info(String.format(Locale.UK, "Skip reasons for station %d: Station busy: %d, Satellite busy: %d, No data: %d, Time skipped station: %,d, Time skipped satellite: %,d, Time skipped no data: %,d", i, entry[0], entry[1], entry[2], entry[3], entry[4], entry[5]));
+    @SuppressWarnings({"Duplicates", "java:S1192"})
+    private void saveSkipWindowStats(ArrayList<int[]> skipStats) {
+        try (final var fileWriter = new FileWriter("SkipWindowStats.csv");
+             final var printWriter = new PrintWriter(fileWriter)
+        ) {
+            printWriter.println("SkipType, StationId, SatelliteId, StartTime, StopTime, Duration");
+            for (final var entry : skipStats) {
+                printWriter.println(String.format("%s, %d, %d, %d, %d, %d", SkipTypes.values()[entry[0]], entry[1], entry[2], entry[3], entry[4], entry[4] - entry[3]));
+            }
+        } catch (Exception e) {
+            log.error("Failed to save window skip statistics.");
         }
     }
 
     private void checkInputDoubles() {
-        var lastEntry = new int[]{0,0,0,0};
+        var lastEntry = new int[]{0, 0, 0, 0};
         Arrays.sort(connectionSchedule.getRecords(), Arrays::compare);
-        for (final var entry : connectionSchedule.getRecords()){
+        for (final var entry : connectionSchedule.getRecords()) {
             if (Arrays.compare(lastEntry, entry) == 0) {
                 throw new ResultIntegrityException("Found doubles in input schedule.");
             }
@@ -211,22 +216,6 @@ public class FifoResolver {
             }
             result[i] += lastStop - lastStart;
         }
-        return result;
-    }
-
-    @SuppressWarnings({"java:S135", "unused"})
-    private List<int[]> calculateOtherVariants(List<int[]> stationsSniffSchedule, int satelliteId, int startTime, int stopTime) {
-        final var result = new ArrayList<int[]>();
-        for (final var entry : stationsSniffSchedule) {
-            final var entrySatelliteId = entry[0];
-            final var entryStartTime = entry[1];
-            if (entrySatelliteId == satelliteId) continue;
-            if (entryStartTime >= startTime && entryStartTime < stopTime) {
-                result.add(entry);
-            }
-            if (entryStartTime >= stopTime) break;
-        }
-
         return result;
     }
 

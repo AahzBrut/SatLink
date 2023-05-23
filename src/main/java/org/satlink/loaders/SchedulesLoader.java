@@ -234,6 +234,6 @@ public class SchedulesLoader {
     }
 
     private static boolean flybyScheduleFileFilter(File file) {
-        return file.getName().startsWith("AreaTarget-Russia-To-");
+        return file.getName().startsWith("Russia-To-Satellite");
     }
 }

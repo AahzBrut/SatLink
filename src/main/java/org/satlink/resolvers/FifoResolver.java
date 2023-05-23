@@ -2,6 +2,7 @@ package org.satlink.resolvers;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.satlink.data.SatelliteParams;
 import org.satlink.data.Schedule;
 import org.satlink.data.SkipTypes;
 import org.satlink.exceptions.ResultIntegrityException;
@@ -17,6 +18,7 @@ public class FifoResolver {
     private static final int DAY_IN_MILLIS = 24 * 3600 * 1000;
     private final Schedule connectionSchedule;
     private final Schedule flybySchedule;
+    private final SatelliteParams[] satelliteParams;
 
     @SuppressWarnings({"java:S135", "java:S3518", "java:S125"})
     public Schedule calculate() {
@@ -47,7 +49,7 @@ public class FifoResolver {
                 continue;
             }
 
-            final var usedMemory = calcMemoryUsage(satelliteTransactions[satelliteId], currentTime) << 2;
+            final var usedMemory = calcMemoryUsage(satelliteTransactions[satelliteId], currentTime, satelliteParams[satelliteId].getTransmitRatio(), satelliteParams[satelliteId].getMaxTimeAmount()) * satelliteParams[satelliteId].getTransmitRatio();
             var maxUploadMemory = endTime - currentTime;
             if (maxUploadMemory > usedMemory) maxUploadMemory = usedMemory;
             if (maxUploadMemory <= 0) {
@@ -125,11 +127,11 @@ public class FifoResolver {
                 for (final var entry : entries) {
                     var idleTime = 0;
                     memoryOnStart = memoryOnStop;
-                    sentAmount = entry[0] >= 0 ? entry[2]-entry[1] >> 2 : 0;
+                    sentAmount = entry[0] >= 0 ? entry[2]-entry[1] / satelliteParams[satelliteId].getTransmitRatio() : 0;
                     memoryOnStop += entry[0] < 0 ? entry[2]-entry[1] : -sentAmount;
-                    if (memoryOnStop > 2500000){
-                        idleTime = memoryOnStop - 2500000;
-                        memoryOnStop = 2500000;
+                    if (memoryOnStop > satelliteParams[satelliteId].getMaxTimeAmount()){
+                        idleTime = memoryOnStop - satelliteParams[satelliteId].getMaxTimeAmount();
+                        memoryOnStop = satelliteParams[satelliteId].getMaxTimeAmount();
                     }
                     printWriter.println(String.format("%d, %d, %d, %d, %d, %d, %d, %d, %d", entry[0], satelliteId, entry[1], entry[2], entry[2] - entry[1], memoryOnStart, memoryOnStop, sentAmount, idleTime));
                 }
@@ -382,23 +384,23 @@ public class FifoResolver {
         return lastTransaction[2] + 1;
     }
 
-    private int calcMemoryUsage(List<int[]> satelliteTransactions, int currentTime) {
+    private int calcMemoryUsage(List<int[]> satelliteTransactions, int currentTime, int transmitRatio, int maxTimeAmount) {
         var result = 0;
         for (int[] transaction : satelliteTransactions) {
             if (transaction[1] >= currentTime) break;
             if (transaction[2] < currentTime) {
                 if (transaction[0] < 0) {
                     result += transaction[2] - transaction[1];
-                    result = Math.min(result, 2500000);
+                    result = Math.min(result, maxTimeAmount);
                 } else {
-                    result -= (transaction[2] - transaction[1]) >> 2;
+                    result -= (transaction[2] - transaction[1]) / transmitRatio;
                 }
             } else {
                 if (transaction[0] < 0) {
                     result += currentTime - transaction[1];
-                    result = Math.min(result, 2500000);
+                    result = Math.min(result, maxTimeAmount);
                 } else {
-                    result -= (currentTime - transaction[1]) >> 2;
+                    result -= (currentTime - transaction[1]) / transmitRatio;
                 }
             }
         }

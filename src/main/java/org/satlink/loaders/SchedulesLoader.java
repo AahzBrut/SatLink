@@ -2,10 +2,7 @@ package org.satlink.loaders;
 
 import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
-import org.satlink.data.FlybyScheduleRecord;
-import org.satlink.data.ParserStates;
-import org.satlink.data.Schedule;
-import org.satlink.data.SourceScheduleRecord;
+import org.satlink.data.*;
 import org.satlink.exceptions.ConnectionSchedulesParserException;
 import org.satlink.utils.FileUtils;
 
@@ -235,5 +232,18 @@ public class SchedulesLoader {
 
     private static boolean flybyScheduleFileFilter(File file) {
         return file.getName().startsWith("Russia-To-Satellite");
+    }
+
+    public static SatelliteParams[] getSatellitesParams(String[] satelliteNames) {
+        final var result = new SatelliteParams[satelliteNames.length];
+        for (int i = 0; i < result.length; i++) {
+            if (i < 50) {
+                result[i] = new SatelliteParams(2500000, 4);
+            } else {
+                result[i] = new SatelliteParams(1250000, 16);
+            }
+        }
+
+        return result;
     }
 }

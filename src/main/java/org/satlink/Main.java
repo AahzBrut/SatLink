@@ -16,10 +16,11 @@ public class Main {
 
         final var connectionSchedules = SchedulesLoader.getConnectionSchedules(Path.of(config.connectionSchedulesPath));
         final var flybySchedules = SchedulesLoader.getFlybySchedules(Path.of(config.flybySchedulesPath));
+        final var satellitesParams = SchedulesLoader.getSatellitesParams(connectionSchedules.getSatelliteNames());
 
         log.info("Input schedules loaded.");
 
-        final var resolver = new FifoResolver(connectionSchedules, flybySchedules);
+        final var resolver = new FifoResolver(connectionSchedules, flybySchedules, satellitesParams);
 
         final var resultSchedule = resolver.calculate();
 

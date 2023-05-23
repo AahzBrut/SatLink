@@ -113,7 +113,7 @@ public class FifoResolver {
         }
     }
 
-    @SuppressWarnings({"Duplicates", "java:S1192"})
+    @SuppressWarnings({"Duplicates", "java:S1192", "java:S3776"})
     private void saveSatelliteTransactions(List<int[]>[] satelliteTransactions) {
         try (final var fileWriter = new FileWriter("SatelliteTransactions.csv");
              final var printWriter = new PrintWriter(fileWriter)
@@ -127,8 +127,10 @@ public class FifoResolver {
                 for (final var entry : entries) {
                     var idleTime = 0;
                     memoryOnStart = memoryOnStop;
-                    sentAmount = entry[0] >= 0 ? entry[2]-entry[1] / satelliteParams[satelliteId].getTransmitRatio() : 0;
+                    sentAmount = entry[0] >= 0 ? (entry[2]-entry[1]) / satelliteParams[satelliteId].getTransmitRatio() : 0;
+
                     memoryOnStop += entry[0] < 0 ? entry[2]-entry[1] : -sentAmount;
+                    memoryOnStop = memoryOnStop == -1 ? 0 : memoryOnStop;
                     if (memoryOnStop > satelliteParams[satelliteId].getMaxTimeAmount()){
                         idleTime = memoryOnStop - satelliteParams[satelliteId].getMaxTimeAmount();
                         memoryOnStop = satelliteParams[satelliteId].getMaxTimeAmount();

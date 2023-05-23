@@ -13,6 +13,8 @@ import java.util.*;
 @Slf4j
 @RequiredArgsConstructor
 public class FifoResolver {
+    @SuppressWarnings("unused")
+    private static final int DAY_IN_MILLIS = 24 * 3600 * 1000;
     private final Schedule connectionSchedule;
     private final Schedule flybySchedule;
 
@@ -74,19 +76,6 @@ public class FifoResolver {
         checkSatelliteShootingTransactions(satelliteTransactions, satelliteShootingPeriods);
         checkSatelliteTransactions(satelliteTransactions, stationTransactions);
 
-        var counter = 0;
-        var avgMemUsage = 0.0;
-        var totalSent = 0.0;
-        for (final var schedule : satelliteTransactions) {
-            final var memUsage = calcMemoryUsage(schedule, Integer.MAX_VALUE) / 25000.0;
-            final var dataSent = calcSentVolume(schedule, Integer.MAX_VALUE);
-            avgMemUsage += memUsage;
-            totalSent += dataSent;
-            log.info("Memory usage for sat" + (counter++) + ": " + memUsage + ", sent: " + dataSent);
-        }
-        log.info("Average mem usage: " + avgMemUsage / (counter == 0 ? 1 : counter));
-        log.info("Total sent: " + totalSent);
-
         printStationStats(stationTransactions);
 
         saveStationsSchedules();
@@ -112,8 +101,9 @@ public class FifoResolver {
 
     private void checkInputDoubles() {
         var lastEntry = new int[]{0, 0, 0, 0};
-        Arrays.sort(connectionSchedule.getRecords(), Arrays::compare);
-        for (final var entry : connectionSchedule.getRecords()) {
+        var schedules = connectionSchedule.getRecords().clone();
+        Arrays.sort(schedules, Arrays::compare);
+        for (final var entry : schedules) {
             if (Arrays.compare(lastEntry, entry) == 0) {
                 throw new ResultIntegrityException("Found doubles in input schedule.");
             }
@@ -126,11 +116,22 @@ public class FifoResolver {
         try (final var fileWriter = new FileWriter("SatelliteTransactions.csv");
              final var printWriter = new PrintWriter(fileWriter)
         ) {
-            printWriter.println("StationId, SatelliteId, StartTime, StopTime, Duration");
-            for (int i = 0; i < satelliteTransactions.length; i++) {
-                final var entries = satelliteTransactions[i];
+            printWriter.println("StationId, SatelliteId, StartTime, StopTime, Duration, MemoryOnStart, MemoryOnStop, SentAmount, IdleTime");
+            for (int satelliteId = 0; satelliteId < satelliteTransactions.length; satelliteId++) {
+                final var entries = satelliteTransactions[satelliteId];
+                var memoryOnStart = 0;
+                var memoryOnStop = 0;
+                var sentAmount = 0;
                 for (final var entry : entries) {
-                    printWriter.println(String.format("%d, %d, %d, %d, %d", entry[0], i, entry[1], entry[2], entry[2] - entry[1]));
+                    var idleTime = 0;
+                    memoryOnStart = memoryOnStop;
+                    sentAmount = entry[0] >= 0 ? entry[2]-entry[1] >> 2 : 0;
+                    memoryOnStop += entry[0] < 0 ? entry[2]-entry[1] : -sentAmount;
+                    if (memoryOnStop > 2500000){
+                        idleTime = memoryOnStop - 2500000;
+                        memoryOnStop = 2500000;
+                    }
+                    printWriter.println(String.format("%d, %d, %d, %d, %d, %d, %d, %d, %d", entry[0], satelliteId, entry[1], entry[2], entry[2] - entry[1], memoryOnStart, memoryOnStop, sentAmount, idleTime));
                 }
             }
         } catch (Exception e) {
@@ -320,24 +321,6 @@ public class FifoResolver {
                     throw new ResultIntegrityException(String.format("StationId: %d, SatelliteId: %d, StartTime: %d, StopTime: %d", transaction[0], i, transaction[1], transaction[2]));
             }
         }
-    }
-
-    @SuppressWarnings("SameParameterValue")
-    private int calcSentVolume(List<int[]> satelliteTransactions, int currentTime) {
-        var result = 0;
-        for (int[] transaction : satelliteTransactions) {
-            if (transaction[1] >= currentTime) break;
-            if (transaction[2] < currentTime) {
-                if (transaction[0] >= 0) {
-                    result += (transaction[2] - transaction[1]) >> 2;
-                }
-            } else {
-                if (transaction[0] >= 0) {
-                    result += (currentTime - transaction[1]) >> 2;
-                }
-            }
-        }
-        return result;
     }
 
     @SuppressWarnings({"java:S3776", "java:S135"})

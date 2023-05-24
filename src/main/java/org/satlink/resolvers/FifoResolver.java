@@ -25,10 +25,10 @@ public class FifoResolver {
 
     @SuppressWarnings({"java:S135", "java:S3518", "java:S125"})
     public void calculate() {
-        sortConnectionSchedule();
+        sortConnectionSchedule(connectionSchedule.getRecords());
         sortFlybySchedule();
 
-        final var connections = connectionSchedule.getRecords();
+        final var connections = quantizeConnections(connectionSchedule.getRecords(), config.timeStep);
         final var satelliteTransactions = initSatelliteTransactions();
         final var stationTransactions = initStationTransactions();
         final var skipStats = new ArrayList<int[]>();
@@ -69,6 +69,34 @@ public class FifoResolver {
         saveResultsAndStats(skipStats, satelliteTransactions, stationTransactions);
     }
 
+    private int[][] quantizeConnections(int[][] records, int timeStep) {
+        final var result = new ArrayList<int[]>();
+
+        for (final var entry : records) {
+            final var stationId = entry[0];
+            final var satelliteId = entry[1];
+            final var startTime = entry[2];
+            final var stopTime = entry[3];
+            var duration = stopTime - startTime;
+            if (duration < 2 * timeStep) {
+                result.add(entry);
+            } else {
+                var currentStartTime = startTime;
+                while (duration > 2 * timeStep) {
+                    result.add(new int[]{stationId, satelliteId, currentStartTime, currentStartTime + timeStep - 1});
+                    currentStartTime += timeStep;
+                    duration -= timeStep;
+                }
+                result.add(new int[]{stationId, satelliteId, currentStartTime, stopTime});
+            }
+        }
+        final var schedule = new int[result.size()][4];
+        result.toArray(schedule);
+        sortConnectionSchedule(schedule);
+
+        return schedule;
+    }
+
     private void saveResultsAndStats(ArrayList<int[]> skipStats, List<int[]>[] satelliteTransactions, List<int[]>[] stationTransactions) {
         final var stationsSatellitesSchedules = initStationSatelliteSchedules();
         final var satelliteShootingPeriods = initSatelliteTransactions();
@@ -79,13 +107,46 @@ public class FifoResolver {
         checkSatelliteShootingTransactions(satelliteTransactions, satelliteShootingPeriods);
         checkSatelliteTransactions(satelliteTransactions, stationTransactions);
 
-        printStationStats(stationTransactions);
+        saveStationStats(stationTransactions);
 
         saveStationsSchedules();
         saveShootingSchedules();
         saveStationsTransactions(stationTransactions);
         saveSatelliteTransactions(satelliteTransactions);
         saveSkipWindowStats(skipStats);
+    }
+
+    private void saveStationStats(List<int[]>[] stationTransactions) {
+        final var outputFile = Paths
+                .get(config.statisticsPath)
+                .resolve("StationStats.csv")
+                .toFile();
+
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            outputFile.getParentFile().mkdirs();
+        } catch (Exception e) {
+            log.error("Failed to save station stats.");
+            return;
+        }
+        try (final var fileWriter = new FileWriter(outputFile);
+             final var printWriter = new PrintWriter(fileWriter)
+        ) {
+            final var rxLimits = getStationsRxLimit();
+            final var stationCount = stationTransactions.length;
+            printWriter.println("StationId, ReceiveTime, TimeLimit, SatellitesNumber");
+            for (var i = 0; i < stationCount; i++) {
+                final var satelliteCount = new HashSet<Integer>();
+                var sumTransactionTime = 0L;
+                for (final var transaction : stationTransactions[i]) {
+                    satelliteCount.add(transaction[0]);
+                    sumTransactionTime += transaction[2] - transaction[1];
+                }
+                printWriter.println(String.format("%d, %d, %d, %d", i, sumTransactionTime, rxLimits[i], satelliteCount.size()));
+            }
+        } catch (Exception e) {
+            log.error("Failed to save station stats.");
+        }
     }
 
     @SuppressWarnings({"Duplicates", "java:S1192"})
@@ -154,11 +215,11 @@ public class FifoResolver {
                 for (final var entry : entries) {
                     var idleTime = 0;
                     memoryOnStart = memoryOnStop;
-                    sentAmount = entry[0] >= 0 ? (entry[2]-entry[1]) / satelliteParams[satelliteId].getTransmitRatio() : 0;
+                    sentAmount = entry[0] >= 0 ? (entry[2] - entry[1]) / satelliteParams[satelliteId].getTransmitRatio() : 0;
 
-                    memoryOnStop += entry[0] < 0 ? entry[2]-entry[1] : -sentAmount;
+                    memoryOnStop += entry[0] < 0 ? entry[2] - entry[1] : -sentAmount;
                     memoryOnStop = memoryOnStop == -1 ? 0 : memoryOnStop;
-                    if (memoryOnStop > satelliteParams[satelliteId].getMaxTimeAmount()){
+                    if (memoryOnStop > satelliteParams[satelliteId].getMaxTimeAmount()) {
                         idleTime = memoryOnStop - satelliteParams[satelliteId].getMaxTimeAmount();
                         memoryOnStop = satelliteParams[satelliteId].getMaxTimeAmount();
                     }
@@ -514,8 +575,8 @@ public class FifoResolver {
         return result;
     }
 
-    private void sortConnectionSchedule() {
-        Arrays.sort(connectionSchedule.getRecords(), (row1, row2) -> {
+    private void sortConnectionSchedule(int[][] array) {
+        Arrays.sort(array, (row1, row2) -> {
             if (row1[2] == row2[2]) return Integer.compare(row1[3], row2[3]);
             return Integer.compare(row1[2], row2[2]);
         });

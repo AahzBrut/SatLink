@@ -17,4 +17,5 @@ public class Config {
     public final String flybySchedulesPath;
     public final String resultsPath;
     public final String statisticsPath;
+    public final int timeStep;
 }

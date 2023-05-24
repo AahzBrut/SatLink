@@ -20,6 +20,7 @@ public class ConfigLoader {
     private static final String FLYBY_SCHEDULES_PATH = "flybySchedulesPath";
     private static final String RESULTS_PATH = "resultsPath";
     private static final String STATISTICS_PATH = "statisticsPath";
+    private static final String TIME_STEP = "timeStep";
 
     public static Config loadConfig() {
         final var currentFolder = getCurrentFolder();
@@ -36,7 +37,8 @@ public class ConfigLoader {
                     props.getProperty(CONNECTION_SCHEDULES_PATH),
                     props.getProperty(FLYBY_SCHEDULES_PATH),
                     props.getProperty(RESULTS_PATH),
-                    props.getProperty(STATISTICS_PATH));
+                    props.getProperty(STATISTICS_PATH),
+                    Integer.parseInt(props.getProperty(TIME_STEP)));
         } catch (Exception e) {
             log.error("Failed to load config.", e);
             throw new ConfigLoadException("Failed to load config.", e);
@@ -54,7 +56,8 @@ public class ConfigLoader {
                         props.getProperty(CONNECTION_SCHEDULES_PATH),
                         props.getProperty(FLYBY_SCHEDULES_PATH),
                         props.getProperty(RESULTS_PATH),
-                        props.getProperty(STATISTICS_PATH));
+                        props.getProperty(STATISTICS_PATH),
+                        Integer.parseInt(props.getProperty(TIME_STEP)));
             } catch (Exception ex) {
                 log.warn("Failed to read application.properties from current directory, will try to use inner.");
             }

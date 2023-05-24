@@ -20,9 +20,9 @@ public class Main {
 
         log.info("Input schedules loaded.");
 
-        final var resolver = new FifoResolver(connectionSchedules, flybySchedules, satellitesParams);
+        final var resolver = new FifoResolver(connectionSchedules, flybySchedules, satellitesParams, config);
 
-        final var resultSchedule = resolver.calculate();
+       resolver.calculate();
 
         log.info("Schedule calculation complete.");
     }

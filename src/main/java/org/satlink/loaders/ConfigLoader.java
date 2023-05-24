@@ -18,6 +18,8 @@ public class ConfigLoader {
     private static final String CONFIG_FILE_NAME = "application.properties";
     private static final String CONNECTION_SCHEDULES_PATH = "connectionSchedulesPath";
     private static final String FLYBY_SCHEDULES_PATH = "flybySchedulesPath";
+    private static final String RESULTS_PATH = "resultsPath";
+    private static final String STATISTICS_PATH = "statisticsPath";
 
     public static Config loadConfig() {
         final var currentFolder = getCurrentFolder();
@@ -30,7 +32,11 @@ public class ConfigLoader {
         try (final var resourceStream = loader.getResourceAsStream(CONFIG_FILE_NAME)) {
             final var props = new Properties();
             props.load(resourceStream);
-            return new Config(props.getProperty(CONNECTION_SCHEDULES_PATH), props.getProperty(FLYBY_SCHEDULES_PATH));
+            return new Config(
+                    props.getProperty(CONNECTION_SCHEDULES_PATH),
+                    props.getProperty(FLYBY_SCHEDULES_PATH),
+                    props.getProperty(RESULTS_PATH),
+                    props.getProperty(STATISTICS_PATH));
         } catch (Exception e) {
             log.error("Failed to load config.", e);
             throw new ConfigLoadException("Failed to load config.", e);
@@ -44,7 +50,11 @@ public class ConfigLoader {
             try (final var propsReader = Files.newBufferedReader(configPath)){
                 final var props = new Properties();
                 props.load(propsReader);
-                return new Config(props.getProperty(CONNECTION_SCHEDULES_PATH), props.getProperty(FLYBY_SCHEDULES_PATH));
+                return new Config(
+                        props.getProperty(CONNECTION_SCHEDULES_PATH),
+                        props.getProperty(FLYBY_SCHEDULES_PATH),
+                        props.getProperty(RESULTS_PATH),
+                        props.getProperty(STATISTICS_PATH));
             } catch (Exception ex) {
                 log.warn("Failed to read application.properties from current directory, will try to use inner.");
             }

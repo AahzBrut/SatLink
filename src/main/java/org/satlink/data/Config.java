@@ -15,4 +15,6 @@ import lombok.experimental.Accessors;
 public class Config {
     public final String connectionSchedulesPath;
     public final String flybySchedulesPath;
+    public final String resultsPath;
+    public final String statisticsPath;
 }

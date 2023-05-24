@@ -2,6 +2,7 @@ package org.satlink.resolvers;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.satlink.data.Config;
 import org.satlink.data.SatelliteParams;
 import org.satlink.data.Schedule;
 import org.satlink.data.SkipTypes;
@@ -9,6 +10,7 @@ import org.satlink.exceptions.ResultIntegrityException;
 
 import java.io.FileWriter;
 import java.io.PrintWriter;
+import java.nio.file.Paths;
 import java.util.*;
 
 @Slf4j
@@ -19,9 +21,10 @@ public class FifoResolver {
     private final Schedule connectionSchedule;
     private final Schedule flybySchedule;
     private final SatelliteParams[] satelliteParams;
+    private final Config config;
 
     @SuppressWarnings({"java:S135", "java:S3518", "java:S125"})
-    public Schedule calculate() {
+    public void calculate() {
         sortConnectionSchedule();
         sortFlybySchedule();
 
@@ -64,8 +67,6 @@ public class FifoResolver {
         }
 
         saveResultsAndStats(skipStats, satelliteTransactions, stationTransactions);
-
-        return null;
     }
 
     private void saveResultsAndStats(ArrayList<int[]> skipStats, List<int[]>[] satelliteTransactions, List<int[]>[] stationTransactions) {
@@ -89,10 +90,23 @@ public class FifoResolver {
 
     @SuppressWarnings({"Duplicates", "java:S1192"})
     private void saveSkipWindowStats(ArrayList<int[]> skipStats) {
-        try (final var fileWriter = new FileWriter("SkipWindowStats.csv");
+        final var outputFile = Paths
+                .get(config.statisticsPath)
+                .resolve("SkipWindowStats.csv")
+                .toFile();
+
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            outputFile.getParentFile().mkdirs();
+        } catch (Exception e) {
+            log.error("Failed to save window skip statistics.", e);
+            return;
+        }
+
+        try (final var fileWriter = new FileWriter(outputFile);
              final var printWriter = new PrintWriter(fileWriter)
         ) {
-            printWriter.println("SkipType, StationId, SatelliteId, StartTime, StopTime, Duration");
+            printWriter.println("SkipType, StationId, SatelliteId, StartTime(ms), StopTime(ms), Duration(ms)");
             for (final var entry : skipStats) {
                 printWriter.println(String.format("%s, %d, %d, %d, %d, %d", SkipTypes.values()[entry[0]], entry[1], entry[2], entry[3], entry[4], entry[4] - entry[3]));
             }
@@ -115,10 +129,23 @@ public class FifoResolver {
 
     @SuppressWarnings({"Duplicates", "java:S1192", "java:S3776"})
     private void saveSatelliteTransactions(List<int[]>[] satelliteTransactions) {
-        try (final var fileWriter = new FileWriter("SatelliteTransactions.csv");
+        final var outputFile = Paths
+                .get(config.statisticsPath)
+                .resolve("SatelliteTransactions.csv")
+                .toFile();
+
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            outputFile.getParentFile().mkdirs();
+        } catch (Exception e) {
+            log.error("Failed to save satellite transactions.", e);
+            return;
+        }
+
+        try (final var fileWriter = new FileWriter(outputFile);
              final var printWriter = new PrintWriter(fileWriter)
         ) {
-            printWriter.println("StationId, SatelliteId, StartTime, StopTime, Duration, MemoryOnStart, MemoryOnStop, SentAmount, IdleTime");
+            printWriter.println("StationId, SatelliteId, StartTime(ms), StopTime(ms), Duration(ms), MemoryOnStart(ms), MemoryOnStop(ms), SentAmount(ms), IdleTime(ms)");
             for (int satelliteId = 0; satelliteId < satelliteTransactions.length; satelliteId++) {
                 final var entries = satelliteTransactions[satelliteId];
                 var memoryOnStart = 0;
@@ -145,10 +172,23 @@ public class FifoResolver {
 
     @SuppressWarnings({"Duplicates", "java:S1192"})
     private void saveStationsTransactions(List<int[]>[] stationTransactions) {
-        try (final var fileWriter = new FileWriter("StationTransactions.csv");
+        final var outputFile = Paths
+                .get(config.statisticsPath)
+                .resolve("StationTransactions.csv")
+                .toFile();
+
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            outputFile.getParentFile().mkdirs();
+        } catch (Exception e) {
+            log.error("Failed to save stations transactions.", e);
+            return;
+        }
+
+        try (final var fileWriter = new FileWriter(outputFile);
              final var printWriter = new PrintWriter(fileWriter)
         ) {
-            printWriter.println("StationId, SatelliteId, StartTime, StopTime, Duration");
+            printWriter.println("StationId, SatelliteId, StartTime(ms), StopTime(ms), Duration(ms)");
             for (int i = 0; i < stationTransactions.length; i++) {
                 final var entries = stationTransactions[i];
                 for (final var entry : entries) {
@@ -156,15 +196,28 @@ public class FifoResolver {
                 }
             }
         } catch (Exception e) {
-            log.error("Failed to save shooting schedules.");
+            log.error("Failed to save stations transactions.");
         }
     }
 
     private void saveShootingSchedules() {
-        try (final var fileWriter = new FileWriter("ShootingSchedules.csv");
+        final var outputFile = Paths
+                .get(config.statisticsPath)
+                .resolve("ShootingSchedules.csv")
+                .toFile();
+
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            outputFile.getParentFile().mkdirs();
+        } catch (Exception e) {
+            log.error("Failed to save shooting schedules.", e);
+            return;
+        }
+
+        try (final var fileWriter = new FileWriter(outputFile);
              final var printWriter = new PrintWriter(fileWriter)
         ) {
-            printWriter.println("SatelliteId, StartTime, StopTime, Duration");
+            printWriter.println("SatelliteId, StartTime(ms), StopTime(ms), Duration(ms)");
             for (final var entry : flybySchedule.getRecords()) {
                 printWriter.println(String.format("%d, %d, %d, %d", entry[0], entry[1], entry[2], entry[2] - entry[1]));
             }
@@ -174,15 +227,28 @@ public class FifoResolver {
     }
 
     private void saveStationsSchedules() {
-        try (final var fileWriter = new FileWriter("StationsSchedules.csv");
+        final var outputFile = Paths
+                .get(config.statisticsPath)
+                .resolve("StationsSchedules.csv")
+                .toFile();
+
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            outputFile.getParentFile().mkdirs();
+        } catch (Exception e) {
+            log.error("Failed to save stations schedules.", e);
+            return;
+        }
+
+        try (final var fileWriter = new FileWriter(outputFile);
              final var printWriter = new PrintWriter(fileWriter)
         ) {
-            printWriter.println("StationId, SatelliteId, StartTime, StopTime, Duration");
+            printWriter.println("StationId, SatelliteId, StartTime(ms), StopTime(ms), Duration(ms)");
             for (final var entry : connectionSchedule.getRecords()) {
                 printWriter.println(String.format("%d, %d, %d, %d, %d", entry[0], entry[1], entry[2], entry[3], entry[3] - entry[2]));
             }
         } catch (Exception e) {
-            log.error("Failed to save stations schedules.");
+            log.error("Failed to save stations schedules.", e);
         }
     }
 

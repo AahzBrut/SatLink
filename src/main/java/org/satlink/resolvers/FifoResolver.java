@@ -7,10 +7,12 @@ import org.satlink.data.SatelliteParams;
 import org.satlink.data.Schedule;
 import org.satlink.data.SkipTypes;
 import org.satlink.exceptions.ResultIntegrityException;
+import org.satlink.utils.FileUtils;
 
 import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.nio.file.Paths;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 @Slf4j
@@ -100,7 +102,9 @@ public class FifoResolver {
     private void saveResultsAndStats(ArrayList<int[]> skipStats, List<int[]>[] satelliteTransactions, List<int[]>[] stationTransactions) {
         final var stationsSatellitesSchedules = initStationSatelliteSchedules();
         final var satelliteShootingPeriods = initSatelliteTransactions();
+
         checkInputDoubles();
+
         checkStationsTransactions(stationTransactions, stationsSatellitesSchedules);
         checkStationsTransactionsContinuity(stationTransactions);
         checkStationsTransactionsContinuity(satelliteTransactions);
@@ -114,6 +118,54 @@ public class FifoResolver {
         saveStationsTransactions(stationTransactions);
         saveSatelliteTransactions(satelliteTransactions);
         saveSkipWindowStats(skipStats);
+
+        saveResultSchedules(stationTransactions);
+    }
+
+    private void saveResultSchedules(List<int[]>[] stationsSchedule) {
+        for (var stationId = 0; stationId < stationsSchedule.length; stationId++) {
+            saveStationResult(stationsSchedule[stationId], connectionSchedule.getStationNames()[stationId]);
+        }
+    }
+
+    private void saveStationResult(List<int[]> stationSchedule, String stationName){
+        final var outputFile = Paths
+                .get(config.resultsPath)
+                .resolve(stationName + "-Schedule.txt")
+                .toFile();
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            outputFile.getParentFile().mkdirs();
+        } catch (Exception e) {
+            log.error("Failed to save station schedule.");
+            return;
+        }
+
+        try (final var fileWriter = new FileWriter(outputFile);
+             final var printWriter = new PrintWriter(fileWriter)
+        ) {
+            printWriter.println(stationName);
+            printWriter.println("-------------------------");
+            printWriter.println("Start Time (UTCG) * Stop Time (UTCG) * Duration (sec) * Satname * Data (Mbytes)");
+            final var initialTime = connectionSchedule.getStartInstant();
+            for(final var scheduleEntry : stationSchedule){
+                final var startTime = initialTime.plus(scheduleEntry[1], ChronoUnit.MILLIS);
+                final var stopTime = initialTime.plus(scheduleEntry[2], ChronoUnit.MILLIS);
+                final var duration = (scheduleEntry[2] - scheduleEntry[1]) * 0.001;
+                final var satName = connectionSchedule.getSatelliteNames()[scheduleEntry[0]];
+                final var data = satelliteParams[scheduleEntry[0]].getBandwidth() * duration;
+
+                printWriter.println(String.format("%30s\t\t%30s\t\t%.3f\t\t%s\t\t%.3f",
+                        FileUtils.US_DATETIME_FORMATTER.format(startTime),
+                        FileUtils.US_DATETIME_FORMATTER.format(stopTime),
+                        duration,
+                        satName,
+                        data
+                        ));
+            }
+        } catch (Exception e) {
+            log.error("Failed to save station schedule.");
+        }
     }
 
     private void saveStationStats(List<int[]>[] stationTransactions) {
@@ -310,20 +362,6 @@ public class FifoResolver {
             }
         } catch (Exception e) {
             log.error("Failed to save stations schedules.", e);
-        }
-    }
-
-    private void printStationStats(List<int[]>[] stationTransactions) {
-        final var rxLimits = getStationsRxLimit();
-        final var stationCount = stationTransactions.length;
-        for (var i = 0; i < stationCount; i++) {
-            final var satelliteCount = new HashSet<Integer>();
-            var sumTransactionTime = 0L;
-            for (final var transaction : stationTransactions[i]) {
-                satelliteCount.add(transaction[0]);
-                sumTransactionTime += transaction[2] - transaction[1];
-            }
-            log.info(String.format(Locale.UK, "Station %d; receive time: %,d; time limit: %,d; number of satellites: %d", i, sumTransactionTime, rxLimits[i], satelliteCount.size()));
         }
     }
 

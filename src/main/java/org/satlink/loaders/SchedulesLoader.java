@@ -31,7 +31,7 @@ public class SchedulesLoader {
         final var satelliteCounter = new AtomicInteger(0);
         LocalDateTime startInstant = LocalDateTime.MAX;
 
-        for (final var entry : schedules){
+        for (final var entry : schedules) {
             stations.add(entry.getStationName());
             satellites.add(entry.getSatelliteName());
             if (startInstant.isAfter(entry.getStartTime())) {
@@ -43,11 +43,11 @@ public class SchedulesLoader {
 
         stations.stream().sorted().forEach(station -> stationsIndex.put(station, stationCounter.getAndIncrement()));
         final var stationNames = new String[stations.size()];
-        stationsIndex.entrySet().stream().sorted(Map.Entry.comparingByValue()).forEach(o -> stationNames[o.getValue()]=o.getKey());
+        stationsIndex.entrySet().stream().sorted(Map.Entry.comparingByValue()).forEach(o -> stationNames[o.getValue()] = o.getKey());
 
         satellites.stream().sorted().forEach(satellite -> satellitesIndex.put(satellite, satelliteCounter.getAndIncrement()));
         final var satelliteNames = new String[satellites.size()];
-        satellitesIndex.entrySet().stream().sorted(Map.Entry.comparingByValue()).forEach(o -> satelliteNames[o.getValue()]=o.getKey());
+        satellitesIndex.entrySet().stream().sorted(Map.Entry.comparingByValue()).forEach(o -> satelliteNames[o.getValue()] = o.getKey());
 
         final var result = new int[schedules.size()][4];
         var rowCounter = 0;
@@ -61,13 +61,14 @@ public class SchedulesLoader {
         }
 
         return new Schedule(
+                startInstant,
                 stationNames,
                 satelliteNames,
                 result
         );
     }
 
-@SuppressWarnings("Duplicates")
+    @SuppressWarnings("Duplicates")
     public static Schedule getFlybySchedules(Path directoryPath) {
         final var schedules = loadFlybySchedules(directoryPath);
         final var satellites = new HashSet<String>();
@@ -75,7 +76,7 @@ public class SchedulesLoader {
         final var satelliteCounter = new AtomicInteger(0);
         LocalDateTime startInstant = LocalDateTime.MAX;
 
-        for (final var entry : schedules){
+        for (final var entry : schedules) {
             satellites.add(entry.getSatelliteName());
             if (startInstant.isAfter(entry.getStartTime())) {
                 startInstant = entry.getStartTime();
@@ -86,7 +87,7 @@ public class SchedulesLoader {
 
         satellites.stream().sorted().forEach(satellite -> satellitesIndex.put(satellite, satelliteCounter.getAndIncrement()));
         final var satelliteNames = new String[satellites.size()];
-        satellitesIndex.entrySet().stream().sorted(Map.Entry.comparingByValue()).forEach(o -> satelliteNames[o.getValue()]=o.getKey());
+        satellitesIndex.entrySet().stream().sorted(Map.Entry.comparingByValue()).forEach(o -> satelliteNames[o.getValue()] = o.getKey());
 
         final var result = new int[schedules.size()][3];
         var rowCounter = 0;
@@ -99,6 +100,7 @@ public class SchedulesLoader {
         }
 
         return new Schedule(
+                startInstant,
                 null,
                 satelliteNames,
                 result
@@ -109,7 +111,7 @@ public class SchedulesLoader {
         final var fileList = FileUtils.getFilteredFilesFromDirectory(directoryPath, SchedulesLoader::connectionScheduleFileFilter);
         final var result = new ArrayList<SourceScheduleRecord>();
 
-        for (final var file : fileList){
+        for (final var file : fileList) {
             result.addAll(parseConnectionScheduleFile(file));
         }
         return result;
@@ -119,7 +121,7 @@ public class SchedulesLoader {
         final var fileList = FileUtils.getFilteredFilesFromDirectory(directoryPath, SchedulesLoader::flybyScheduleFileFilter);
         final var result = new ArrayList<FlybyScheduleRecord>();
 
-        for (final var file : fileList){
+        for (final var file : fileList) {
             result.addAll(parseFlybyScheduleFile(file));
         }
         return result;
@@ -238,9 +240,9 @@ public class SchedulesLoader {
         final var result = new SatelliteParams[satelliteNames.length];
         for (int i = 0; i < result.length; i++) {
             if (i < 50) {
-                result[i] = new SatelliteParams(2500000, 4);
+                result[i] = new SatelliteParams(2500000, 4, 100);
             } else {
-                result[i] = new SatelliteParams(1250000, 16);
+                result[i] = new SatelliteParams(1250000, 16, 25);
             }
         }
 

@@ -9,4 +9,5 @@ import lombok.RequiredArgsConstructor;
 public class SatelliteParams {
     private final int maxTimeAmount;
     private final int transmitRatio;
+    private final int bandwidth;
 }

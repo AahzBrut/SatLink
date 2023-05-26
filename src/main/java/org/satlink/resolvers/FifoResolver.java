@@ -118,8 +118,41 @@ public class FifoResolver {
         saveStationsTransactions(stationTransactions);
         saveSatelliteTransactions(satelliteTransactions);
         saveSkipWindowStats(skipStats);
+        saveStationDataAmountReceived(stationTransactions);
 
         saveResultSchedules(stationTransactions);
+    }
+
+    private void saveStationDataAmountReceived(List<int[]>[] stationTransactions) {
+        final var outputFile = Paths
+                .get(config.statisticsPath)
+                .resolve("StationDataAmountReceived.csv")
+                .toFile();
+
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            outputFile.getParentFile().mkdirs();
+        } catch (Exception e) {
+            log.error("Failed to save stations received data amounts.", e);
+            return;
+        }
+
+        try (final var fileWriter = new FileWriter(outputFile);
+             final var printWriter = new PrintWriter(fileWriter)
+        ) {
+            printWriter.println("Station name, Received amount(MB)");
+            for (int i = 0; i < stationTransactions.length; i++) {
+                final var entries = stationTransactions[i];
+                var amount = 0.0;
+                for (final var entry : entries) {
+                    amount += (entry[2] - entry[1]) * 0.001 * satelliteParams[entry[0]].getBandwidth();
+                }
+                printWriter.println(String.format("%s, %10.3f", connectionSchedule.getStationNames()[i], amount));
+            }
+        } catch (Exception e) {
+            log.error("Failed to save stations received data amounts.");
+        }
+
     }
 
     private void saveResultSchedules(List<int[]>[] stationsSchedule) {
@@ -128,7 +161,7 @@ public class FifoResolver {
         }
     }
 
-    private void saveStationResult(List<int[]> stationSchedule, String stationName){
+    private void saveStationResult(List<int[]> stationSchedule, String stationName) {
         final var outputFile = Paths
                 .get(config.resultsPath)
                 .resolve(stationName + "-Schedule.txt")
@@ -148,7 +181,7 @@ public class FifoResolver {
             printWriter.println("-------------------------");
             printWriter.println("Start Time (UTCG) * Stop Time (UTCG) * Duration (sec) * Satname * Data (Mbytes)");
             final var initialTime = connectionSchedule.getStartInstant();
-            for(final var scheduleEntry : stationSchedule){
+            for (final var scheduleEntry : stationSchedule) {
                 final var startTime = initialTime.plus(scheduleEntry[1], ChronoUnit.MILLIS);
                 final var stopTime = initialTime.plus(scheduleEntry[2], ChronoUnit.MILLIS);
                 final var duration = (scheduleEntry[2] - scheduleEntry[1]) * 0.001;
@@ -161,7 +194,7 @@ public class FifoResolver {
                         duration,
                         satName,
                         data
-                        ));
+                ));
             }
         } catch (Exception e) {
             log.error("Failed to save station schedule.");
@@ -351,7 +384,7 @@ public class FifoResolver {
                 printWriter.println(String.format("%d, %s, %s, %d", entry[0], startTime, stopTime, entry[2] - entry[1]));
             }
         } catch (Exception e) {
-            log.error("Failed to save shooting schedules.",e);
+            log.error("Failed to save shooting schedules.", e);
         }
     }
 

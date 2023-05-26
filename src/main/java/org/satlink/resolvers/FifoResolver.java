@@ -7,13 +7,15 @@ import org.satlink.data.SatelliteParams;
 import org.satlink.data.Schedule;
 import org.satlink.data.SkipTypes;
 import org.satlink.exceptions.ResultIntegrityException;
-import org.satlink.utils.FileUtils;
 
 import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.nio.file.Paths;
 import java.time.temporal.ChronoUnit;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -155,9 +157,9 @@ public class FifoResolver {
                 final var satName = connectionSchedule.getSatelliteNames()[scheduleEntry[0]];
                 final var data = satelliteParams[scheduleEntry[0]].getBandwidth() * duration;
 
-                printWriter.println(String.format("%30s\t\t%30s\t\t%.3f\t\t%s\t\t%.3f",
-                        FileUtils.US_DATETIME_FORMATTER.format(startTime),
-                        FileUtils.US_DATETIME_FORMATTER.format(stopTime),
+                printWriter.println(String.format("%30s%30s%30.3f%30s%30.3f",
+                        config.mainDateTimeFormatter.format(startTime),
+                        config.mainDateTimeFormatter.format(stopTime),
                         duration,
                         satName,
                         data
@@ -219,9 +221,13 @@ public class FifoResolver {
         try (final var fileWriter = new FileWriter(outputFile);
              final var printWriter = new PrintWriter(fileWriter)
         ) {
-            printWriter.println("SkipType, StationId, SatelliteId, StartTime(ms), StopTime(ms), Duration(ms)");
+            printWriter.println("SkipType, StationId, SatelliteId, StartTime(UTC), StopTime(UTC), Duration(ms)");
+            final var initialTime = connectionSchedule.getStartInstant();
+            final var formatter = config.statisticsDateTimeFormatter;
             for (final var entry : skipStats) {
-                printWriter.println(String.format("%s, %d, %d, %d, %d, %d", SkipTypes.values()[entry[0]], entry[1], entry[2], entry[3], entry[4], entry[4] - entry[3]));
+                final var startTime = formatter.format(initialTime.plus(entry[3], ChronoUnit.MILLIS));
+                final var stopTime = formatter.format(initialTime.plus(entry[4], ChronoUnit.MILLIS));
+                printWriter.println(String.format("%s, %d, %d, %s, %s, %d", SkipTypes.values()[entry[0]], entry[1], entry[2], startTime, stopTime, entry[4] - entry[3]));
             }
         } catch (Exception e) {
             log.error("Failed to save window skip statistics.");
@@ -258,7 +264,9 @@ public class FifoResolver {
         try (final var fileWriter = new FileWriter(outputFile);
              final var printWriter = new PrintWriter(fileWriter)
         ) {
-            printWriter.println("StationId, SatelliteId, StartTime(ms), StopTime(ms), Duration(ms), MemoryOnStart(ms), MemoryOnStop(ms), SentAmount(ms), IdleTime(ms)");
+            printWriter.println("StationId, SatelliteId, StartTime(UTC), StopTime(UTC), Duration(ms), MemoryOnStart(ms), MemoryOnStop(ms), SentAmount(ms), IdleTime(ms)");
+            final var initialTime = connectionSchedule.getStartInstant();
+            final var formatter = config.statisticsDateTimeFormatter;
             for (int satelliteId = 0; satelliteId < satelliteTransactions.length; satelliteId++) {
                 final var entries = satelliteTransactions[satelliteId];
                 var memoryOnStart = 0;
@@ -275,7 +283,9 @@ public class FifoResolver {
                         idleTime = memoryOnStop - satelliteParams[satelliteId].getMaxTimeAmount();
                         memoryOnStop = satelliteParams[satelliteId].getMaxTimeAmount();
                     }
-                    printWriter.println(String.format("%d, %d, %d, %d, %d, %d, %d, %d, %d", entry[0], satelliteId, entry[1], entry[2], entry[2] - entry[1], memoryOnStart, memoryOnStop, sentAmount, idleTime));
+                    final var startTime = formatter.format(initialTime.plus(entry[1], ChronoUnit.MILLIS));
+                    final var stopTime = formatter.format(initialTime.plus(entry[2], ChronoUnit.MILLIS));
+                    printWriter.println(String.format("%d, %d, %s, %s, %d, %d, %d, %d, %d", entry[0], satelliteId, startTime, stopTime, entry[2] - entry[1], memoryOnStart, memoryOnStop, sentAmount, idleTime));
                 }
             }
         } catch (Exception e) {
@@ -301,11 +311,15 @@ public class FifoResolver {
         try (final var fileWriter = new FileWriter(outputFile);
              final var printWriter = new PrintWriter(fileWriter)
         ) {
-            printWriter.println("StationId, SatelliteId, StartTime(ms), StopTime(ms), Duration(ms)");
+            printWriter.println("StationId, SatelliteId, StartTime(UTC), StopTime(UTC), Duration(ms)");
+            final var initialTime = connectionSchedule.getStartInstant();
+            final var formatter = config.statisticsDateTimeFormatter;
             for (int i = 0; i < stationTransactions.length; i++) {
                 final var entries = stationTransactions[i];
                 for (final var entry : entries) {
-                    printWriter.println(String.format("%d, %d, %d, %d, %d", i, entry[0], entry[1], entry[2], entry[2] - entry[1]));
+                    final var startTime = formatter.format(initialTime.plus(entry[1], ChronoUnit.MILLIS));
+                    final var stopTime = formatter.format(initialTime.plus(entry[2], ChronoUnit.MILLIS));
+                    printWriter.println(String.format("%d, %d, %s, %s, %d", i, entry[0], startTime, stopTime, entry[2] - entry[1]));
                 }
             }
         } catch (Exception e) {
@@ -330,12 +344,16 @@ public class FifoResolver {
         try (final var fileWriter = new FileWriter(outputFile);
              final var printWriter = new PrintWriter(fileWriter)
         ) {
-            printWriter.println("SatelliteId, StartTime(ms), StopTime(ms), Duration(ms)");
+            printWriter.println("SatelliteId, StartTime(UTC), StopTime(UTC), Duration(ms)");
+            final var initialTime = connectionSchedule.getStartInstant();
+            final var formatter = config.statisticsDateTimeFormatter;
             for (final var entry : flybySchedule.getRecords()) {
-                printWriter.println(String.format("%d, %d, %d, %d", entry[0], entry[1], entry[2], entry[2] - entry[1]));
+                final var startTime = formatter.format(initialTime.plus(entry[1], ChronoUnit.MILLIS));
+                final var stopTime = formatter.format(initialTime.plus(entry[2], ChronoUnit.MILLIS));
+                printWriter.println(String.format("%d, %s, %s, %d", entry[0], startTime, stopTime, entry[2] - entry[1]));
             }
         } catch (Exception e) {
-            log.error("Failed to save shooting schedules.");
+            log.error("Failed to save shooting schedules.",e);
         }
     }
 
@@ -356,9 +374,13 @@ public class FifoResolver {
         try (final var fileWriter = new FileWriter(outputFile);
              final var printWriter = new PrintWriter(fileWriter)
         ) {
-            printWriter.println("StationId, SatelliteId, StartTime(ms), StopTime(ms), Duration(ms)");
+            printWriter.println("StationId, SatelliteId, StartTime(UTC), StopTime(UTC), Duration(ms)");
+            final var initialTime = connectionSchedule.getStartInstant();
+            final var formatter = config.statisticsDateTimeFormatter;
             for (final var entry : connectionSchedule.getRecords()) {
-                printWriter.println(String.format("%d, %d, %d, %d, %d", entry[0], entry[1], entry[2], entry[3], entry[3] - entry[2]));
+                final var startTime = formatter.format(initialTime.plus(entry[2], ChronoUnit.MILLIS));
+                final var stopTime = formatter.format(initialTime.plus(entry[3], ChronoUnit.MILLIS));
+                printWriter.println(String.format("%d, %d, %s, %s, %d", entry[0], entry[1], startTime, stopTime, entry[3] - entry[2]));
             }
         } catch (Exception e) {
             log.error("Failed to save stations schedules.", e);

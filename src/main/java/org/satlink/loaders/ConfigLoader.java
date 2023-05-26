@@ -10,18 +10,15 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.Properties;
+
+import static org.satlink.data.Config.*;
 
 @Slf4j
 @UtilityClass
 public class ConfigLoader {
-    private static final String CONFIG_FILE_NAME = "application.properties";
-    private static final String CONNECTION_SCHEDULES_PATH = "connectionSchedulesPath";
-    private static final String FLYBY_SCHEDULES_PATH = "flybySchedulesPath";
-    private static final String RESULTS_PATH = "resultsPath";
-    private static final String STATISTICS_PATH = "statisticsPath";
-    private static final String TIME_STEP = "timeStep";
-
     public static Config loadConfig() {
         final var currentFolder = getCurrentFolder();
         if (currentFolder != null) {
@@ -33,12 +30,7 @@ public class ConfigLoader {
         try (final var resourceStream = loader.getResourceAsStream(CONFIG_FILE_NAME)) {
             final var props = new Properties();
             props.load(resourceStream);
-            return new Config(
-                    props.getProperty(CONNECTION_SCHEDULES_PATH),
-                    props.getProperty(FLYBY_SCHEDULES_PATH),
-                    props.getProperty(RESULTS_PATH),
-                    props.getProperty(STATISTICS_PATH),
-                    Integer.parseInt(props.getProperty(TIME_STEP)));
+            return getConfig(props);
         } catch (Exception e) {
             log.error("Failed to load config.", e);
             throw new ConfigLoadException("Failed to load config.", e);
@@ -52,12 +44,7 @@ public class ConfigLoader {
             try (final var propsReader = Files.newBufferedReader(configPath)){
                 final var props = new Properties();
                 props.load(propsReader);
-                return new Config(
-                        props.getProperty(CONNECTION_SCHEDULES_PATH),
-                        props.getProperty(FLYBY_SCHEDULES_PATH),
-                        props.getProperty(RESULTS_PATH),
-                        props.getProperty(STATISTICS_PATH),
-                        Integer.parseInt(props.getProperty(TIME_STEP)));
+                return getConfig(props);
             } catch (Exception ex) {
                 log.warn("Failed to read application.properties from current directory, will try to use inner.");
             }
@@ -80,5 +67,18 @@ public class ConfigLoader {
             }
         }
         return null;
+    }
+
+    private static Config getConfig(Properties props) {
+        return new Config(
+                props.getProperty(CONNECTION_SCHEDULES_PATH),
+                props.getProperty(CONNECTION_SCHEDULES_FILENAME_START),
+                props.getProperty(FLYBY_SCHEDULES_PATH),
+                props.getProperty(FLYBY_SCHEDULES_FILENAME_START),
+                props.getProperty(RESULTS_PATH),
+                props.getProperty(STATISTICS_PATH),
+                DateTimeFormatter.ofPattern(props.getProperty(MAIN_DATE_TIME_PATTERN), Locale.US),
+                DateTimeFormatter.ofPattern(props.getProperty(STATISTICS_DATE_TIME_PATTERN)),
+                Integer.parseInt(props.getProperty(TIME_STEP)));
     }
 }

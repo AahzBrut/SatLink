@@ -14,8 +14,8 @@ public class Main {
         final var config = ConfigLoader.loadConfig();
         log.info("Config loaded.");
 
-        final var connectionSchedules = SchedulesLoader.getConnectionSchedules(Path.of(config.connectionSchedulesPath));
-        final var flybySchedules = SchedulesLoader.getFlybySchedules(Path.of(config.flybySchedulesPath));
+        final var connectionSchedules = SchedulesLoader.getConnectionSchedules(Path.of(config.connectionSchedulesPath), config);
+        final var flybySchedules = SchedulesLoader.getFlybySchedules(Path.of(config.flybySchedulesPath), config);
         final var satellitesParams = SchedulesLoader.getSatellitesParams(connectionSchedules.getSatelliteNames());
 
         log.info("Input schedules loaded.");

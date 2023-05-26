@@ -21,8 +21,8 @@ public class SchedulesLoader {
     private static final String HEADER_MARKER = "-----";
 
     @SuppressWarnings("Duplicates")
-    public static Schedule getConnectionSchedules(Path directoryPath) {
-        final var schedules = loadConnectionSchedules(directoryPath);
+    public static Schedule getConnectionSchedules(Path directoryPath, Config config) {
+        final var schedules = loadConnectionSchedules(directoryPath, config);
         final var stations = new HashSet<String>();
         final var satellites = new HashSet<String>();
         final var stationsIndex = new HashMap<String, Integer>();
@@ -69,8 +69,8 @@ public class SchedulesLoader {
     }
 
     @SuppressWarnings("Duplicates")
-    public static Schedule getFlybySchedules(Path directoryPath) {
-        final var schedules = loadFlybySchedules(directoryPath);
+    public static Schedule getFlybySchedules(Path directoryPath, Config config) {
+        final var schedules = loadFlybySchedules(directoryPath, config);
         final var satellites = new HashSet<String>();
         final var satellitesIndex = new HashMap<String, Integer>();
         final var satelliteCounter = new AtomicInteger(0);
@@ -107,28 +107,28 @@ public class SchedulesLoader {
         );
     }
 
-    public static List<SourceScheduleRecord> loadConnectionSchedules(Path directoryPath) {
-        final var fileList = FileUtils.getFilteredFilesFromDirectory(directoryPath, SchedulesLoader::connectionScheduleFileFilter);
+    public static List<SourceScheduleRecord> loadConnectionSchedules(Path directoryPath, Config config) {
+        final var fileList = FileUtils.getFilteredFilesFromDirectory(config, directoryPath, SchedulesLoader::connectionScheduleFileFilter);
         final var result = new ArrayList<SourceScheduleRecord>();
 
         for (final var file : fileList) {
-            result.addAll(parseConnectionScheduleFile(file));
+            result.addAll(parseConnectionScheduleFile(file, config));
         }
         return result;
     }
 
-    public static List<FlybyScheduleRecord> loadFlybySchedules(Path directoryPath) {
-        final var fileList = FileUtils.getFilteredFilesFromDirectory(directoryPath, SchedulesLoader::flybyScheduleFileFilter);
+    public static List<FlybyScheduleRecord> loadFlybySchedules(Path directoryPath, Config config) {
+        final var fileList = FileUtils.getFilteredFilesFromDirectory(config, directoryPath, SchedulesLoader::flybyScheduleFileFilter);
         final var result = new ArrayList<FlybyScheduleRecord>();
 
         for (final var file : fileList) {
-            result.addAll(parseFlybyScheduleFile(file));
+            result.addAll(parseFlybyScheduleFile(file, config));
         }
         return result;
     }
 
     @SuppressWarnings("Duplicates")
-    private static List<SourceScheduleRecord> parseConnectionScheduleFile(File file) {
+    private static List<SourceScheduleRecord> parseConnectionScheduleFile(File file, Config config) {
         try {
             final var result = new ArrayList<SourceScheduleRecord>();
             final var lines = Files.readAllLines(file.toPath());
@@ -157,8 +157,8 @@ public class SchedulesLoader {
                             break;
                         }
                         final var access = Long.parseLong(currentLine.substring(0, 24).trim());
-                        final var startTime = LocalDateTime.parse(currentLine.substring(28, 52).trim(), FileUtils.US_DATETIME_FORMATTER);
-                        final var stopTime = LocalDateTime.parse(currentLine.substring(56, 80).trim(), FileUtils.US_DATETIME_FORMATTER);
+                        final var startTime = LocalDateTime.parse(currentLine.substring(28, 52).trim(), config.mainDateTimeFormatter);
+                        final var stopTime = LocalDateTime.parse(currentLine.substring(56, 80).trim(), config.mainDateTimeFormatter);
                         final var duration = Double.parseDouble(currentLine.substring(85, 98).trim());
                         result.add(new SourceScheduleRecord(
                                 stationName,
@@ -180,7 +180,7 @@ public class SchedulesLoader {
     }
 
     @SuppressWarnings("Duplicates")
-    private static List<FlybyScheduleRecord> parseFlybyScheduleFile(File file) {
+    private static List<FlybyScheduleRecord> parseFlybyScheduleFile(File file, Config config) {
         try {
             final var result = new ArrayList<FlybyScheduleRecord>();
             final var lines = Files.readAllLines(file.toPath());
@@ -207,8 +207,8 @@ public class SchedulesLoader {
                             break;
                         }
                         final var access = Long.parseLong(currentLine.substring(0, 24).trim());
-                        final var startTime = LocalDateTime.parse(currentLine.substring(28, 52).trim(), FileUtils.US_DATETIME_FORMATTER);
-                        final var stopTime = LocalDateTime.parse(currentLine.substring(56, 80).trim(), FileUtils.US_DATETIME_FORMATTER);
+                        final var startTime = LocalDateTime.parse(currentLine.substring(28, 52).trim(), config.mainDateTimeFormatter);
+                        final var stopTime = LocalDateTime.parse(currentLine.substring(56, 80).trim(), config.mainDateTimeFormatter);
                         final var duration = Double.parseDouble(currentLine.substring(85, 98).trim());
                         result.add(new FlybyScheduleRecord(
                                 satelliteName,
@@ -228,12 +228,12 @@ public class SchedulesLoader {
         }
     }
 
-    private static boolean connectionScheduleFileFilter(File file) {
-        return file.getName().startsWith("Facility-");
+    private static boolean connectionScheduleFileFilter(File file, Config config) {
+        return file.getName().startsWith(config.connectionScheduleFileNameStart);
     }
 
-    private static boolean flybyScheduleFileFilter(File file) {
-        return file.getName().startsWith("Russia-To-Satellite");
+    private static boolean flybyScheduleFileFilter(File file, Config config) {
+        return file.getName().startsWith(config.flybyScheduleFileNameStart);
     }
 
     public static SatelliteParams[] getSatellitesParams(String[] satelliteNames) {

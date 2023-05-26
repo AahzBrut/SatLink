@@ -20,8 +20,6 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 public class FifoResolver {
-    @SuppressWarnings("unused")
-    private static final int DAY_IN_MILLIS = 24 * 3600 * 1000;
     private final Schedule connectionSchedule;
     private final Schedule flybySchedule;
     private final SatelliteParams[] satelliteParams;
